@@ -35,13 +35,18 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- A reference to the entire .NET Framework is automatically included -->
+    <Folder Include="JsAnalyzer\" />
+    <Folder Include="WebGraph\Actions\" />
   </ItemGroup>
   <ItemGroup>
     <TargetPlatform Include="WindowsPhoneApp, Version=8.1" />
     <TargetPlatform Include="Windows, Version=8.1" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="WebGraph\BaseNode.cs" />
+    <Compile Include="WebGraph\Nodes\PageParser.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="WebGraph\WebRoot.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
