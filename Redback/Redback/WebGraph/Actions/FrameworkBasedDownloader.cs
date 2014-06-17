@@ -32,7 +32,7 @@ namespace Redback.WebGraph.Actions
         /// <remarks>
         ///  So far this can't be used for retrieving page content directly
         /// </remarks>
-        public async override void Perform()
+        public async override Task Perform()
         {
             Uri uri;
             Uri.TryCreate(Url, UriKind.Absolute, out uri);
@@ -59,10 +59,12 @@ namespace Redback.WebGraph.Actions
                     TargetNode = new SimplePageParser
                     {
                         Owner = Owner,
+                        Url = Url,
                         InducingAction = this,
                         Level = Level + 1,
                         Page = page
                     };
+                    Owner.AddObject(TargetNode);
                 }
             }
         }

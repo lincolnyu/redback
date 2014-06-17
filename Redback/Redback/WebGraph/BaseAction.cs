@@ -1,4 +1,6 @@
-﻿namespace Redback.WebGraph
+﻿using System.Threading.Tasks;
+
+namespace Redback.WebGraph
 {
     public abstract class BaseAction : GraphObject
     {
@@ -12,7 +14,7 @@
 
         #region Methods
 
-        public abstract void Perform();
+        public abstract Task Perform();
 
         #endregion
     }

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Redback.WebGraph
 {
@@ -51,7 +52,7 @@ namespace Redback.WebGraph
         /// <summary>
         ///  Initiates the analysis from this node
         /// </summary>
-        public abstract void Analyze();
+        public abstract Task Analyze();
 
         #endregion
     }

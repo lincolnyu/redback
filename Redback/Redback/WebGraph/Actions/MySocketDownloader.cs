@@ -1,8 +1,6 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using Windows.Storage.Streams;
 using Redback.Connections;
 using Redback.Helpers;
 using Redback.WebGraph.Nodes;
@@ -11,30 +9,11 @@ namespace Redback.WebGraph.Actions
 {
     public class MySocketDownloader : BaseDownloader
     {
-        #region Fields
-
-        private bool _headerRead;
-        private bool _isPage;
-
-        private StringBuilder _sbPage;
-
-        private Stream _outputStream;
-
-        #endregion
-
-        #region Properties
-
-        public uint TotalBytes { get; private set; }
-
-        public long ReadBytes { get; private set; }
-
-        #endregion
-
         #region Methods
 
         #region BaseAction members
 
-        public override async void Perform()
+        public override async Task Perform()
         {
             string hostName;
             string path;
@@ -80,27 +59,36 @@ namespace Redback.WebGraph.Actions
                     return false;
                 }
 
-                _headerRead = false;
-                ReadBytes = 0;
-                _sbPage = new StringBuilder();
-                await agent.GetResponse(GetData);
-                if (_isPage)
+                var response = await agent.GetResponse();
+
+                if (response.IsPage)
                 {
-                    var page = _sbPage.ToString();
                     TargetNode = new SimplePageParser
                     {
                         Owner = Owner,
+                        Url = Url,
                         InducingAction = this,
                         Level = Level + 1,
-                        Page = page
+                        Page = response.PageContent
                     };
+                    Owner.AddObject(TargetNode);
 #if DEBUG && WRITE_ORIG_PAGE
-                    using (var sw = new StreamWriter(_outputStream))
+                    var folder = await LocalDirectory.GetOrCreateFolderAsync();
+                    var file = await folder.GetOrCreateFileAsync(LocalFileName);
+                    var outputStream = await file.OpenStreamForWriteAsync();
+                    using (var sw = new StreamWriter(outputStream))
                     {
-                        sw.Write(page);
+                        sw.Write(response.PageContent);
                     }
-                    _outputStream.Flush();
+                    outputStream.Flush();
 #endif
+                }
+                else
+                {
+                    var folder = await LocalDirectory.GetOrCreateFolderAsync();
+                    var file = await folder.GetOrCreateFileAsync(LocalFileName);
+                    var outputStream = await file.OpenStreamForWriteAsync();
+                    await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);
                 }
 
                 return true;
@@ -108,68 +96,6 @@ namespace Redback.WebGraph.Actions
             catch
             {
                 return false;
-            }
-        }
-
-        private async Task GetData(DataReader reader, uint actualLength)
-        {
-            // Assume the data is sent by section
-            if (!_headerRead)
-            {
-                var s = reader.ReadString(actualLength);
-                if (s.EndsWith("\r\n\r\n"))
-                {
-                    _headerRead = true;
-                }
-                var iContentType = s.IndexOf("Content-Type:", StringComparison.OrdinalIgnoreCase);
-                if (iContentType >= 0)
-                {
-                    var start = iContentType + "Content-Type:".Length;
-                    var end = s.IndexOf('\r', start);
-                    var mime = s.Substring(start, end - start).Trim();
-                    if (mime.Contains("text/html"))
-                    {
-                        _isPage = true;
-                    }
-                    
-                    if (LocalDirectory != null && LocalFileName != null && _outputStream == null)
-                    {
-                        var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                        var file = await folder.GetOrCreateFileAsync(LocalFileName);
-                        _outputStream = await file.OpenStreamForWriteAsync();
-                    }
-                }
-                var iContentLength = s.IndexOf("Content-Length:", StringComparison.OrdinalIgnoreCase);
-                if (iContentLength >= 0)
-                {
-                    var start = iContentLength + "Content-Length:".Length;
-                    var end = s.IndexOf('\r', start);
-                    var slen = s.Substring(start, end - start).Trim();
-                    TotalBytes = uint.Parse(slen);
-                }
-
-                if (_isPage)
-                {
-                    var contentStart = s.IndexOf("\r\n\r\n") + "\r\n\r\n".Length;
-                    _sbPage.Append(s.Substring(contentStart));
-                }
-                // Not expecting data succeeding header for non-page
-            }
-            else
-            {
-                if (_isPage)
-                {
-                    var s = reader.ReadString(actualLength);
-                    _sbPage.Append(s);
-                }
-
-                if (_outputStream != null)
-                {
-                    var buffer = new byte[actualLength];
-                    reader.ReadBytes(buffer);
-                    await _outputStream.WriteAsync(buffer, 0, (int)actualLength);
-                    ReadBytes += actualLength;
-                }
             }
         }
 

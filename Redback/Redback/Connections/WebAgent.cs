@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.IO.Compression;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Networking;
@@ -13,6 +15,32 @@ namespace Redback.Connections
         #region Delegates
 
         public delegate Task GetDataCallback(DataReader reader, uint acutalLength);
+
+        #endregion
+
+        #region Nested types
+
+        public class HttpResponse
+        {
+            #region Properties
+
+            public uint ContentLength { get; set; }
+            public string ContentType { get; set; }
+
+            public string PageContent { get; set; }
+
+            public byte[] DataContent { get; set; }
+
+            public bool IsPage
+            {
+                get
+                {
+                    return PageContent != null;
+                }
+            }
+
+            #endregion
+        }
 
         #endregion
 
@@ -75,7 +103,7 @@ namespace Redback.Connections
                         successful = true;
                         break;
                     }
-                    catch (Exception exception)
+                    catch (Exception)
                     {
                         // If this is an unknown status it means that the error is fatal and retry will likely fail.
                         //if (SocketError.GetStatus(exception.HResult) == SocketErrorStatus.Unknown)
@@ -87,69 +115,154 @@ namespace Redback.Connections
                 }
             }
 
+            _writer = null;
+            _reader = null;
+
             return successful;
         }
 
         public async Task<bool> SendRequest(string request)
         {
-            if (_writer == null)
+            var successful = false;
+            for (var i = 0; i < 2 && !successful; i++)
             {
-                _writer = new DataWriter(_socket.OutputStream);
-            }
-
-            // writes the request directly (without leading string size)
-            _writer.WriteString(request);
-
-            // Write the locally buffered data to the network.
-            try
-            {
-                await _writer.StoreAsync();
-                return true;
-            }
-            catch (Exception exception)
-            {
-                // If this is an unknown status it means that the error if fatal and retry will likely fail.
-                if (SocketError.GetStatus(exception.HResult) == SocketErrorStatus.Unknown)
+                if (_writer == null)
                 {
-                    throw;
+                    _writer = new DataWriter(_socket.OutputStream);
                 }
-                return false;
+
+                // writes the request directly (without leading string size)
+                _writer.WriteString(request);
+
+                // Write the locally buffered data to the network.
+                try
+                {
+                    await _writer.StoreAsync();
+                    successful = true;
+                }
+                catch (Exception exception)
+                {
+                    // If this is an unknown status it means that the error if fatal and retry will likely fail.
+                    if (SocketError.GetStatus(exception.HResult) == SocketErrorStatus.Unknown)
+                    {
+                        throw;
+                    }
+                    successful = false;
+                }
+                if (!successful)
+                {
+                    await SocketConnect(); // reconnect
+                }
             }
+            return successful;
         }
 
-        public async Task<string> GetStringResponse()
+        public async Task<HttpResponse> GetResponse()
         {
             if (_reader == null)
             {
                 _reader = new DataReader(_socket.InputStream);
             }
 
-            var sbResponse = new StringBuilder();
-
             try
             {
+                 // parse the http response
+                var sbHeader = new StringBuilder();
                 while (true)
                 {
-                    // Read first 4 bytes (length of the subsequent string).
-                    var sizeFieldCount = await _reader.LoadAsync(sizeof (uint));
-                    if (sizeFieldCount != sizeof (uint))
+                    await _reader.LoadAsync(1);
+                    var s = _reader.ReadString(1);
+                    sbHeader.Append(s);
+
+                    if (sbHeader.Length > 4 && sbHeader.ToString().EndsWith("\r\n\r\n"))
                     {
-                        // The underlying socket was closed before we were able to read the whole data.
                         break;
                     }
-
-                    // Read the string.
-                    var stringLength = _reader.ReadUInt32();
-                    var actualStringLength = await _reader.LoadAsync(stringLength);
-                    if (stringLength != actualStringLength)
-                    {
-                        // The underlying socket was closed before we were able to read the whole data.
-                        break;
-                    }
-
-                    var s = _reader.ReadString(actualStringLength);
-                    sbResponse.Append(s);
                 }
+
+                var header = sbHeader.ToString();
+                var contentLengthStart = header.IndexOf("Content-Length:", StringComparison.Ordinal) + "Content-Length:".Length;
+                var contentLengthEnd = header.IndexOf("\r\n", contentLengthStart, StringComparison.Ordinal);
+                var contentTypeStart = header.IndexOf("Content-Type:", StringComparison.Ordinal) + "Content-Type:".Length;
+                var contentTypeEnd = header.IndexOf("\r\n", contentTypeStart, StringComparison.Ordinal);
+                var contentEncodingStart = header.IndexOf("Content-Encoding", StringComparison.Ordinal) +
+                                      "Content-Encoding:".Length;
+                var contentEncodingEnd = header.IndexOf("\r\n", contentEncodingStart, StringComparison.Ordinal);
+
+                // TODO make sure 'Accept-Ranges' is byte?
+
+                var contentType = header.Substring(contentTypeStart, contentTypeEnd - contentTypeStart).Trim();
+                var sContentLength = header.Substring(contentLengthStart, contentLengthEnd - contentLengthStart).Trim();
+                var contentEncoding =
+                    header.Substring(contentEncodingStart, contentEncodingEnd - contentEncodingStart).Trim();
+                uint contentLength;
+                uint.TryParse(sContentLength, out contentLength);
+
+                var response = new HttpResponse
+                {
+                    ContentType = contentType,
+                    ContentLength = contentLength,
+                };
+
+                var data = new byte[contentLength];
+                await _reader.LoadAsync(contentLength);
+                _reader.ReadBytes(data);
+
+                if (contentEncoding.Contains("gzip"))
+                {
+                    const int decompBufferSize = 4096;
+                    var decompBuffer = new byte[decompBufferSize];
+
+                    using (var dataStream = new MemoryStream(data))
+                    {
+                        using (var gzip = new GZipStream(dataStream, CompressionMode.Decompress))
+                        {
+                            using (var deflated = new MemoryStream())
+                            {
+                                int size;
+                                do
+                                {
+                                    size = gzip.Read(decompBuffer, 0, decompBufferSize);
+                                    deflated.Write(decompBuffer, 0, size);
+                                } while (size > 0);
+                                data = deflated.ToArray();  // update data with the deflated data
+                            }
+                        }
+                    }
+                }
+
+                if (contentType.Contains("text/html"))
+                {
+                    var sbPayload = new StringBuilder();
+                    if (contentType.Contains("utf8"))
+                    {
+                        var enc = new UTF8Encoding();
+                        var dec = enc.GetDecoder();
+                        var charCount = dec.GetCharCount(data, 0, data.Length);
+                        var chars = new char[charCount];
+                        dec.GetChars(data, 0, data.Length, chars, 0);
+                        foreach (var c in chars)
+                        {
+                            sbPayload.Append(c);
+                        }
+                    }
+                    else
+                    {
+                        // use trivial decoding
+                        // TODO to support other decoding methods?
+                        foreach (var b in data)
+                        {
+                            var c = (char) b;
+                            sbPayload.Append(c);
+                        }
+                    }
+                    response.PageContent = sbPayload.ToString();
+                }
+                else
+                {
+                    response.DataContent = data;
+                }
+                return response;
             }
             catch (Exception exception)
             {
@@ -159,49 +272,8 @@ namespace Redback.Connections
                     throw;
                 }
             }
-            return sbResponse.ToString();
-        }
-
-        public async Task GetResponse(GetDataCallback getData)
-        {
-            if (_reader == null)
-            {
-                _reader = new DataReader(_socket.InputStream);
-            }
-
-            try
-            {
-                while (true)
-                {
-                    // Read first 4 bytes (length of the subsequent data).
-                    var sizeFieldCount = await _reader.LoadAsync(sizeof (uint));
-                    if (sizeFieldCount != sizeof (uint))
-                    {
-                        // The underlying socket was closed before we were able to read the whole data.
-                        break;
-                    }
-
-                    // Read the data.
-                    var dataLength = _reader.ReadUInt32();
-                    var actualLength = await _reader.LoadAsync(dataLength);
-
-                    await getData(_reader, actualLength);
-
-                    if (dataLength != actualLength)
-                    {
-                        // The underlying socket was closed before we were able to read the whole data.
-                        break;
-                    }
-                }
-            }
-            catch (Exception exception)
-            {
-                // If this is an unknown status it means that the error is fatal and retry will likely fail.
-                if (SocketError.GetStatus(exception.HResult) == SocketErrorStatus.Unknown)
-                {
-                    throw;
-                }
-            }
+            await SocketConnect(); // reconnect
+            return null;
         }
 
         #endregion

@@ -136,7 +136,7 @@ namespace Redback.WebGraph
 
         #region Methods
 
-        public void Run()
+        public async void Run()
         {
             while (!_queuedObjects.IsEmpty)
             {
@@ -145,14 +145,14 @@ namespace Redback.WebGraph
                 var action = obj as BaseAction;
                 if (action != null)
                 {
-                    action.Perform();
+                    await action.Perform();
                 }
                 else
                 {
                     var node = obj as BaseNode;
                     if (node != null)
                     {
-                        node.Analyze();
+                        await node.Analyze();
                     }
                 }
 
