@@ -175,7 +175,6 @@ namespace Redback.WebGraph.Nodes
         public override async Task Analyze()
         {
             var lastIndex = 0;
-            var index = 0;
             var sbOutputPage = new StringBuilder();
 
             // TODO how about https?
@@ -207,6 +206,7 @@ namespace Redback.WebGraph.Nodes
                     break;
                 }
 
+                int index;
                 if (src < href)
                 {
                     index = src;
@@ -220,16 +220,18 @@ namespace Redback.WebGraph.Nodes
 
                 string link;
                 var linkEnd = GetLink(Page, index, out link); // one character after closing double quotation mark 
-                if (linkEnd < 0)
+                if (linkEnd >= 0)
+                {
+                    var absLink = GetAbsoluteUrl(Url, link);
+                    link = absLink;
+                }
+                if (linkEnd < 0 || link == null)
                 {
                     var sb = Page.Substring(lastIndex, index - lastIndex);
                     sbOutputPage.Append(sb);
                     lastIndex = index;
                     continue;
                 }
-
-                var absLink = GetAbsoluteUrl(Url, link);
-                link = absLink;
 
                 var stringBetween = Page.Substring(lastIndex, index - lastIndex);
                 sbOutputPage.Append(stringBetween);

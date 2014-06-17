@@ -75,20 +75,25 @@ namespace Redback.WebGraph.Actions
 #if DEBUG && WRITE_ORIG_PAGE
                     var folder = await LocalDirectory.GetOrCreateFolderAsync();
                     var file = await folder.GetOrCreateFileAsync(LocalFileName);
-                    var outputStream = await file.OpenStreamForWriteAsync();
-                    using (var sw = new StreamWriter(outputStream))
+                    using (var outputStream = await file.OpenStreamForWriteAsync())
                     {
-                        sw.Write(response.PageContent);
+                        using (var sw = new StreamWriter(outputStream))
+                        {
+                            sw.Write(response.PageContent);
+                        }
+                        outputStream.Flush();
                     }
-                    outputStream.Flush();
 #endif
                 }
                 else
                 {
                     var folder = await LocalDirectory.GetOrCreateFolderAsync();
                     var file = await folder.GetOrCreateFileAsync(LocalFileName);
-                    var outputStream = await file.OpenStreamForWriteAsync();
-                    await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);
+                    using (var outputStream = await file.OpenStreamForWriteAsync())
+                    {
+                        await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);
+                        await outputStream.FlushAsync();
+                    }
                 }
 
                 return true;

@@ -49,6 +49,7 @@ namespace Redback.Helpers
         /// <returns>The folder created at the specified path</returns>
         public static async Task<IStorageFolder> GetOrCreateFolderAsync(this string path)
         {
+            path = path.TrimEnd('\\');
             var segs = path.Split('\\');
 
             var sbPath = new StringBuilder();

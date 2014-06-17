@@ -257,10 +257,12 @@ namespace Redback.Connections
                         }
                     }
                     response.PageContent = sbPayload.ToString();
+                    response.DataContent = null;
                 }
                 else
                 {
                     response.DataContent = data;
+                    response.PageContent = null;
                 }
                 return response;
             }

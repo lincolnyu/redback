@@ -219,6 +219,12 @@ namespace Redback.WebGraph
                 return 0;
             }
 
+            var lvlcomp = x.Level.CompareTo(y.Level);
+            if (lvlcomp != 0)
+            {
+                return lvlcomp; // BFS
+            }
+
             var xHasUrl = x as IHasUrl;
             var yHasUrl = y as IHasUrl;
 
@@ -273,12 +279,6 @@ namespace Redback.WebGraph
             if (xHasUrl != null)
             {
                 return 1;
-            }
-
-            var lvlcomp = x.Level.CompareTo(y.Level);
-            if (lvlcomp != 0)
-            {
-                return lvlcomp; // BFS
             }
 
             return -1; // doesn't matter
