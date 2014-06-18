@@ -25,16 +25,6 @@ namespace Redback.WebGraph
         public virtual string Url { get; set; }
 
         /// <summary>
-        ///  The directory that keeps this downloaded object
-        /// </summary>
-        public virtual string LocalDirectory { get; set; }
-
-        /// <summary>
-        ///  The name of the file for keeping the downloaded object if any
-        /// </summary>
-        public virtual string Name { get; set; }
-
-        /// <summary>
         ///  The action that leads to this node
         /// </summary>
         public BaseAction InducingAction { get; set; }

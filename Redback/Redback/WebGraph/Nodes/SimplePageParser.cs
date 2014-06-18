@@ -268,6 +268,22 @@ namespace Redback.WebGraph.Nodes
 
             sbOutputPage.Append(Page.Substring(lastIndex, Page.Length - lastIndex));
             OutputPage = sbOutputPage.ToString();
+
+            // writes output page to file
+            var downloader = InducingAction as BaseDownloader;
+            if (downloader != null)
+            {
+                var folder = await downloader.LocalDirectory.GetOrCreateFolderAsync();
+                var file = await folder.GetOrCreateFileAsync(downloader.LocalFileName);
+                using (var fs = await file.OpenStreamForWriteAsync())
+                {
+                    using (var sw = new StreamWriter(fs))
+                    {
+                        sw.Write(OutputPage);
+                    }
+                    await fs.FlushAsync();
+                }
+            }
         }        
    
         #endregion

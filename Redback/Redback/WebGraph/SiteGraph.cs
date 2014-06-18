@@ -212,6 +212,24 @@ namespace Redback.WebGraph
             return firstt.Entry;
         }
 
+        private bool IsOnHostOrReferencedByHostPage(GraphObject x)
+        {
+            var hasUrl = x as IHasUrl;
+            string dummy, hostName;
+            if (hasUrl != null && hasUrl.Url.UrlToHostName(out dummy, out hostName, out dummy) && hostName == StartHost)
+            {
+                return true;
+            }
+
+            var action = x as BaseAction;
+            if (action == null || !action.SourceNode.Url.UrlToHostName(out dummy, out hostName, out dummy))
+            {
+                return false;
+            }
+
+            return hostName == StartHost;
+        }
+
         private int TaskCompare(GraphObject x, GraphObject y)
         {
             if (Equals(x, y))
@@ -223,6 +241,21 @@ namespace Redback.WebGraph
             if (lvlcomp != 0)
             {
                 return lvlcomp; // BFS
+            }
+
+            // if x and y are at the same level, they should be both actions or both nodes
+            if (x is BaseAction && y is BaseAction)
+            {
+                var xIsHostAdhered = IsOnHostOrReferencedByHostPage(x);
+                var yIsHostAdhered = IsOnHostOrReferencedByHostPage(y);
+                if (xIsHostAdhered && !yIsHostAdhered)
+                {
+                    return -1;
+                }
+                if (!xIsHostAdhered && yIsHostAdhered)
+                {
+                    return 1;
+                }
             }
 
             var xHasUrl = x as IHasUrl;
@@ -271,16 +304,17 @@ namespace Redback.WebGraph
             }
 
             // task object without a URL has higher priority
-            if (yHasUrl != null)
+            if (xHasUrl != null)
             {
                 return -1;
             }
 
-            if (xHasUrl != null)
+            if (yHasUrl != null)
             {
                 return 1;
             }
 
+            // NOTE x is given higher priority the tree node should appear on the left in searching
             return -1; // doesn't matter
         }
 
