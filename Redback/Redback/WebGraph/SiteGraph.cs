@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using QSharp.Scheme.Classical.Trees;
 using Redback.Connections;
 using Redback.Helpers;
@@ -20,6 +21,10 @@ namespace Redback.WebGraph
         public class ObjectProcessedEventArgs : EventArgs
         {
             public GraphObject Object { get; set; }
+
+            public bool Successful { get; set; }
+
+            public string ErrorMessage { get; set; }
         }
         
         #endregion
@@ -51,7 +56,20 @@ namespace Redback.WebGraph
             string prefix, hostName, path;
             startPage.UrlToHostName(out prefix, out hostName, out path);
             StartHost = hostName;
-            var page = new MySocketDownloader { Url = startPage, Owner=this };
+
+            string dir, fileName;
+            if (startPage.UrlToFilePath(out dir, out fileName))
+            {
+                dir = Path.Combine(BaseDirectory, dir);
+            }
+
+            var page = new MySocketDownloader
+            {
+                Url = startPage,
+                Owner = this,
+                LocalDirectory = dir,
+                LocalFileName = fileName
+            };
             AddObject(page);
 
             RootObject = page;
@@ -141,24 +159,35 @@ namespace Redback.WebGraph
             while (!_queuedObjects.IsEmpty)
             {
                 var obj = PopObject();
-
-                var action = obj as BaseAction;
-                if (action != null)
+                string errorMessage = null;
+                try
                 {
-                    await action.Perform();
-                }
-                else
-                {
-                    var node = obj as BaseNode;
-                    if (node != null)
+                    var action = obj as BaseAction;
+                    if (action != null)
                     {
-                        await node.Analyze();
+                        await action.Perform();
+                    }
+                    else
+                    {
+                        var node = obj as BaseNode;
+                        if (node != null)
+                        {
+                            await node.Analyze();
+                        }
                     }
                 }
-
+                catch (Exception e)
+                {
+                    errorMessage = e.Message;
+                }
                 if (ObjectProcessed != null)
                 {
-                    ObjectProcessed(this, new ObjectProcessedEventArgs {Object = obj});
+                    ObjectProcessed(this, new ObjectProcessedEventArgs
+                    {
+                        Object = obj,
+                        Successful = errorMessage == null,
+                        ErrorMessage = errorMessage
+                    });
                 }
             }
         }

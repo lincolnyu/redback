@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -25,6 +27,7 @@ namespace Redback.Connections
             #region Properties
 
             public uint ContentLength { get; set; }
+
             public string ContentType { get; set; }
 
             public string PageContent { get; set; }
@@ -181,8 +184,16 @@ namespace Redback.Connections
                 }
 
                 var header = sbHeader.ToString();
-                var contentLengthStart = header.IndexOf("Content-Length:", StringComparison.Ordinal) + "Content-Length:".Length;
-                var contentLengthEnd = header.IndexOf("\r\n", contentLengthStart, StringComparison.Ordinal);
+
+                int contentLengthStart = 0, contentLengthEnd = 0;
+
+                var transferEncoding = header.IndexOf("Transfer-Encoding", StringComparison.Ordinal);
+                if (transferEncoding < 0)
+                {
+                    contentLengthStart = header.IndexOf("Content-Length:", StringComparison.Ordinal) + "Content-Length:".Length;
+                    contentLengthEnd = header.IndexOf("\r\n", contentLengthStart, StringComparison.Ordinal);
+                }
+
                 var contentTypeStart = header.IndexOf("Content-Type:", StringComparison.Ordinal) + "Content-Type:".Length;
                 var contentTypeEnd = header.IndexOf("\r\n", contentTypeStart, StringComparison.Ordinal);
                 var contentEncodingStart = header.IndexOf("Content-Encoding", StringComparison.Ordinal) +
@@ -192,21 +203,52 @@ namespace Redback.Connections
                 // TODO make sure 'Accept-Ranges' is byte?
 
                 var contentType = header.Substring(contentTypeStart, contentTypeEnd - contentTypeStart).Trim();
-                var sContentLength = header.Substring(contentLengthStart, contentLengthEnd - contentLengthStart).Trim();
                 var contentEncoding =
                     header.Substring(contentEncodingStart, contentEncodingEnd - contentEncodingStart).Trim();
+
+                
+                byte[] data;
                 uint contentLength;
-                uint.TryParse(sContentLength, out contentLength);
+                if (transferEncoding >= 0)
+                {
+                    var bufs = new LinkedList<byte[]>();
+                    contentLength = 0;
+                    while (true)
+                    {
+                        var buf = await ReadChunk();
+                        if (buf.Length > 0)
+                        {
+                            bufs.AddLast(buf);
+                            contentLength += (uint)buf.Length;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    data = new byte[contentLength];
+                    var i = 0;
+                    foreach (var buf in bufs)
+                    {
+                        buf.CopyTo(data, i);
+                        i += buf.Length;
+                    }
+                }
+                else
+                {
+                    var sContentLength = header.Substring(contentLengthStart, contentLengthEnd - contentLengthStart).Trim();
+                    uint.TryParse(sContentLength, out contentLength);
+
+                    data = new byte[contentLength];
+                    await _reader.LoadAsync(contentLength);
+                    _reader.ReadBytes(data);
+                }
 
                 var response = new HttpResponse
                 {
                     ContentType = contentType,
                     ContentLength = contentLength,
                 };
-
-                var data = new byte[contentLength];
-                await _reader.LoadAsync(contentLength);
-                _reader.ReadBytes(data);
 
                 if (contentEncoding.Contains("gzip"))
                 {
@@ -276,6 +318,51 @@ namespace Redback.Connections
             }
             await SocketConnect(); // reconnect
             return null;
+        }
+
+
+        private async Task<byte[]> ReadChunk()
+        {
+            var sb = new StringBuilder();
+            while (true)
+            {
+                await _reader.LoadAsync(1);
+                var s = _reader.ReadString(1);
+                sb.Append(s);
+
+                if (sb.Length > 4 && sb.ToString().EndsWith("\r\n"))
+                {
+                    break;
+                }
+            }
+
+            var slen = sb.ToString();
+            uint len;
+            if (!uint.TryParse(slen, NumberStyles.HexNumber, null, out len))
+            {
+                // fatal error
+                throw new Exception("Bad chunk datsa");
+            }
+
+            if (len == 0)
+            {
+                return new byte[0];
+            }
+
+            var bytes = new byte[len];
+
+            await _reader.LoadAsync(len);
+            _reader.ReadBytes(bytes);
+
+            // there is still a "\r\n" to consume?
+            await _reader.LoadAsync(2);
+            var sTail = _reader.ReadString(2);
+            if (sTail != "\r\n")
+            {
+                // log the error
+            }
+
+            return bytes;
         }
 
         #endregion

@@ -239,29 +239,36 @@ namespace Redback.WebGraph.Nodes
                 string dir, fileName;
                 if (link.UrlToFilePath(out dir, out fileName))
                 {
-                    dir = Path.Combine(Owner.BaseDirectory, dir);
-                }
-
-                // check to see if the link has been downloaded
-                if (!Owner.HasDownloaded(link))
-                {
-                    var download = new MySocketDownloader
+                    try
                     {
-                        Owner = Owner,
-                        SourceNode = this,
-                        Level = Level + 1,
-                        Url = link,
-                        LocalDirectory = dir,
-                        LocalFileName = fileName
-                    };
+                        dir = Path.Combine(Owner.BaseDirectory, dir);
 
-                    Actions.Add(download);
-                    Owner.AddObject(download);
-                    Owner.SetHasDownloaded(link);
+                        // check to see if the link has been downloaded
+                        if (!Owner.HasDownloaded(link))
+                        {
+                            var download = new MySocketDownloader
+                            {
+                                Owner = Owner,
+                                SourceNode = this,
+                                Level = Level + 1,
+                                Url = link,
+                                LocalDirectory = dir,
+                                LocalFileName = fileName
+                            };
+
+                            Actions.Add(download);
+                            Owner.AddObject(download);
+                            Owner.SetHasDownloaded(link);
+                        }
+
+                        var fileUrl = string.Format("\"file:///{0}\"", dir);
+                        sbOutputPage.Append(fileUrl);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // skip this link which is probably invalid
+                    }
                 }
-
-                var fileUrl = string.Format("\"file:///{0}\"", dir);
-                sbOutputPage.Append(fileUrl);
 
                 lastIndex = linkEnd;
             }
@@ -274,14 +281,13 @@ namespace Redback.WebGraph.Nodes
             if (downloader != null)
             {
                 var folder = await downloader.LocalDirectory.GetOrCreateFolderAsync();
-                var file = await folder.GetOrCreateFileAsync(downloader.LocalFileName);
+                var file = await folder.CreateNewFileAsync(downloader.LocalFileName);
                 using (var fs = await file.OpenStreamForWriteAsync())
                 {
                     using (var sw = new StreamWriter(fs))
                     {
                         sw.Write(OutputPage);
                     }
-                    await fs.FlushAsync();
                 }
             }
         }        

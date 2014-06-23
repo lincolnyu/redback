@@ -49,9 +49,20 @@ namespace WebDownloader
                 url = hasUrl.Url;
             }
             var isAction = args.Object is BaseAction;
-            var msg = isAction
-                ? string.Format("Performing action with url '{0}'", url)
-                : string.Format("Analyzing node with url '{0}'", url);
+            string msg;
+
+            if (args.Successful)
+            {
+                msg = isAction
+                    ? string.Format("Succeeded in performing action with url '{0}'", url)
+                    : string.Format("Succeeded in analyzing node with url '{0}'", url);
+            }
+            else
+            {
+                msg = isAction
+                    ? string.Format("Failed to perform action with url '{0}', error being '{1}'", url, args.ErrorMessage)
+                    : string.Format("Failed to analyze node with url '{0}', error being '{1}'", url, args.ErrorMessage);
+            }
 // ReSharper disable once PossibleNullReferenceException
             LstTasks.Items.Add(msg);
         }

@@ -72,23 +72,22 @@ namespace Redback.WebGraph.Actions
                         Page = response.PageContent
                     };
                     Owner.AddObject(TargetNode);
-#if DEBUG && WRITE_ORIG_PAGE
+#if !NO_WRITE_ORIG_PAGE
                     var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                    var file = await folder.GetOrCreateFileAsync(LocalFileName);
+                    var file = await folder.CreateNewFileAsync(LocalFileName);
                     using (var outputStream = await file.OpenStreamForWriteAsync())
                     {
                         using (var sw = new StreamWriter(outputStream))
                         {
                             sw.Write(response.PageContent);
                         }
-                        outputStream.Flush();
                     }
 #endif
                 }
                 else
                 {
                     var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                    var file = await folder.GetOrCreateFileAsync(LocalFileName);
+                    var file = await folder.CreateNewFileAsync(LocalFileName);
                     using (var outputStream = await file.OpenStreamForWriteAsync())
                     {
                         await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);

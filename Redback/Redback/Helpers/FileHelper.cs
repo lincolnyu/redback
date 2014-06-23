@@ -26,6 +26,20 @@ namespace Redback.Helpers
             return subfolder ?? (await folder.CreateFolderAsync(subfolderName));
         }
 
+        public static async Task<IStorageFile> CreateNewFileAsync(this IStorageFolder folder, string fileName)
+        {
+            try
+            {
+                var file = await folder.GetFileAsync(fileName);
+                await file.DeleteAsync();
+            }
+            catch (FileNotFoundException)
+            {
+            }
+
+            return await folder.CreateFileAsync(fileName);
+        }
+
         public static async Task<IStorageFile> GetOrCreateFileAsync(this IStorageFolder folder, string fileName)
         {
             IStorageFile file;
@@ -80,6 +94,17 @@ namespace Redback.Helpers
                 }
             }
             return folder;
+        }
+
+        public static async Task DeleteIfExists(this IStorageFile f)
+        {
+            try
+            {
+                await f.DeleteAsync();
+            }
+            catch (FileNotFoundException)
+            {                
+            }
         }
 
         #endregion
