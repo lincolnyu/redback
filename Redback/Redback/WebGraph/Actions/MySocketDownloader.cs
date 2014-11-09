@@ -40,6 +40,11 @@ namespace Redback.WebGraph.Actions
                 path = "/" + path;
             }
             sbRequest.AddParameterFormat(@"GET {0} HTTP/1.1", path);
+            // TODO accept type as per a priori knowledge of the data type (inferred from metadata/extension etc)
+            // TODO like application/javascript for js
+            // TODO      text/css for css
+            // TODO      image/png, image/svg+xml, image/* for images
+            // NOTE however as far as */* is included, the it's supposed to be able to accept anything
             sbRequest.AddParameter(@"Accept:  text/html, application/xhtml+xml, */*");
             sbRequest.AddParameterFormat(@"Referer: http://{0}/", hostName);
             sbRequest.AddParameter(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
@@ -63,7 +68,7 @@ namespace Redback.WebGraph.Actions
 
                 if (response.IsSession)
                 {
-                    return await DownloadSesional(agent, hostName, path, response);
+                    return await ProcessSessionalPage(agent, hostName, path, response);
                 }
 
                 return await ProcessPageResponse(response);
@@ -105,6 +110,8 @@ namespace Redback.WebGraph.Actions
             }
             else
             {
+                // NOTE this is to save non page data which has no chance to save otherwise
+                // NOTE page data is supposed to be saved if wanted by the node (parser)
                 var folder = await LocalDirectory.GetOrCreateFolderAsync();
                 var file = await folder.CreateNewFileAsync(LocalFileName);
                 using (var outputStream = await file.OpenStreamForWriteAsync())
@@ -116,7 +123,7 @@ namespace Redback.WebGraph.Actions
             return true;
         }
         
-        private async Task<bool> DownloadSesional(WebAgent agent, string hostName, string path, WebAgent.HttpResponse response)
+        private async Task<bool> ProcessSessionalPage(WebAgent agent, string hostName, string path, WebAgent.HttpResponse response)
         {
             var location = response.Location;
             var token = GetTokenFromUrlInResponse(location);
