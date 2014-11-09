@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/2010/manifest" xmlns:m2="http://schemas.microsoft.com/appx/2013/manifest">
-  <Identity Name="0a5bfab8-4f70-4d82-84ad-78837171c5ed" Publisher="CN=quanb_000" Version="1.0.0.0" />
+  <Identity Name="0a5bfab8-4f70-4d82-84ad-78837171c5ed" Publisher="CN=quanb_000" Version="1.0.0.1" />
   <Properties>
     <DisplayName>WebDownloader</DisplayName>
     <PublisherDisplayName>quanb_000</PublisherDisplayName>

@@ -9,6 +9,7 @@ using Windows.Networking;
 using Windows.Networking.Connectivity;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
+using Redback.Helpers;
 
 namespace Redback.Connections
 {
@@ -34,11 +35,33 @@ namespace Redback.Connections
 
             public byte[] DataContent { get; set; }
 
+            public string Location { get; set; }
+
+            public string SetCookie { get; set; }
+
+            public string CacheControl { get; set; }
+
+            public string Expires { get; set; }
+
+            public string Pragma { get; set; }
+
+            public string XWhom { get; set; }
+
+            public string P3P { get; set; }
+
             public bool IsPage
             {
                 get
                 {
                     return PageContent != null;
+                }
+            }
+
+            public bool IsSession
+            {
+                get
+                {
+                    return Location != null;
                 }
             }
 
@@ -185,28 +208,13 @@ namespace Redback.Connections
 
                 var header = sbHeader.ToString();
 
-                int contentLengthStart = 0, contentLengthEnd = 0;
-
                 var transferEncoding = header.IndexOf("Transfer-Encoding", StringComparison.Ordinal);
-                if (transferEncoding < 0)
-                {
-                    contentLengthStart = header.IndexOf("Content-Length:", StringComparison.Ordinal) + "Content-Length:".Length;
-                    contentLengthEnd = header.IndexOf("\r\n", contentLengthStart, StringComparison.Ordinal);
-                }
-
-                var contentTypeStart = header.IndexOf("Content-Type:", StringComparison.Ordinal) + "Content-Type:".Length;
-                var contentTypeEnd = header.IndexOf("\r\n", contentTypeStart, StringComparison.Ordinal);
-                var contentEncodingStart = header.IndexOf("Content-Encoding", StringComparison.Ordinal) +
-                                      "Content-Encoding:".Length;
-                var contentEncodingEnd = header.IndexOf("\r\n", contentEncodingStart, StringComparison.Ordinal);
 
                 // TODO make sure 'Accept-Ranges' is byte?
 
-                var contentType = header.Substring(contentTypeStart, contentTypeEnd - contentTypeStart).Trim();
-                var contentEncoding =
-                    header.Substring(contentEncodingStart, contentEncodingEnd - contentEncodingStart).Trim();
+                var contentType = header.GetParameter("Content-Type:");
+                var contentEncoding = header.GetParameter("Content-Encoding:");
 
-                
                 byte[] data;
                 uint contentLength;
                 if (transferEncoding >= 0)
@@ -236,12 +244,41 @@ namespace Redback.Connections
                 }
                 else
                 {
-                    var sContentLength = header.Substring(contentLengthStart, contentLengthEnd - contentLengthStart).Trim();
+                    var sContentLength = header.GetParameter("Content-Length:");
                     uint.TryParse(sContentLength, out contentLength);
 
                     data = new byte[contentLength];
+
+                    if (contentLength > 0)
+                    {
                     await _reader.LoadAsync(contentLength);
                     _reader.ReadBytes(data);
+                    }
+                    else
+                    {
+                        // session
+                        var cookie = header.GetParameter("Set-Cookie:");
+                        var location = header.GetParameter("Location:");
+                        var cache = header.GetParameter("Cache-Control:");
+                        var expires = header.GetParameter("Expires:");
+                        var pragma = header.GetParameter("Pragma:");
+                        var xwhom = header.GetParameter("X-Whom:");
+                        var p3p = header.GetParameter("P3P:");
+
+                        var sessionResponse = new HttpResponse
+                        {
+                            ContentType = contentType,
+                            ContentLength = 0,
+                            SetCookie = cookie,
+                            Location = location,
+                            CacheControl = cache,
+                            Expires = expires,
+                            Pragma = pragma,
+                            XWhom = xwhom,
+                            P3P = p3p
+                        };
+                        return sessionResponse;
+                    }
                 }
 
                 var response = new HttpResponse

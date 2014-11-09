@@ -39,16 +39,16 @@ namespace Redback.WebGraph.Actions
             {
                 path = "/" + path;
             }
-            sbRequest.AppendFormat(@"GET {0} HTTP/1.1" + HttpHelper.NewLine, path);
-            sbRequest.Append(@"Accept:  text/html, application/xhtml+xml, */*" + HttpHelper.NewLine);
-            sbRequest.AppendFormat(@"Referer: http://{0}/" + HttpHelper.NewLine, hostName);
-            sbRequest.Append(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3" + HttpHelper.NewLine);
-            sbRequest.Append(@"UserAgent:  Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko" + HttpHelper.NewLine);
-            sbRequest.Append(@"Accept-Encoding: gzip,deflate" + HttpHelper.NewLine);
-            sbRequest.AppendFormat(@"Host: {0}" + HttpHelper.NewLine, hostName);
-            sbRequest.Append(@"DNT: 1" + HttpHelper.NewLine);
-            sbRequest.Append(@"Connection: keep-alive" + HttpHelper.NewLine);
-            sbRequest.Append(HttpHelper.NewLine);
+            sbRequest.AddParameterFormat(@"GET {0} HTTP/1.1", path);
+            sbRequest.AddParameter(@"Accept:  text/html, application/xhtml+xml, */*");
+            sbRequest.AddParameterFormat(@"Referer: http://{0}/", hostName);
+            sbRequest.AddParameter(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
+            sbRequest.AddParameter(@"UserAgent:  Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
+            sbRequest.AddParameter(@"Accept-Encoding: gzip,deflate");
+            sbRequest.AddParameterFormat(@"Host: {0}", hostName);
+            sbRequest.AddParameter(@"DNT: 1");
+            sbRequest.AddParameter(@"Connection: keep-alive");
+            sbRequest.ConcludeRequest();
 
             try
             {
@@ -61,46 +61,140 @@ namespace Redback.WebGraph.Actions
 
                 var response = await agent.GetResponse();
 
-                if (response.IsPage)
+                if (response.IsSession)
                 {
-                    TargetNode = new SimplePageParser
-                    {
-                        Owner = Owner,
-                        Url = Url,
-                        InducingAction = this,
-                        Level = Level + 1,
-                        Page = response.PageContent
-                    };
-                    Owner.AddObject(TargetNode);
-#if !NO_WRITE_ORIG_PAGE
-                    var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                    var file = await folder.CreateNewFileAsync(LocalFileName);
-                    using (var outputStream = await file.OpenStreamForWriteAsync())
-                    {
-                        using (var sw = new StreamWriter(outputStream))
-                        {
-                            sw.Write(response.PageContent);
-                        }
-                    }
-#endif
-                }
-                else
-                {
-                    var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                    var file = await folder.CreateNewFileAsync(LocalFileName);
-                    using (var outputStream = await file.OpenStreamForWriteAsync())
-                    {
-                        await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);
-                        await outputStream.FlushAsync();
-                    }
+                    return await DownloadSesional(agent, hostName, path, response);
                 }
 
-                return true;
+                return await ProcessPageResponse(response);
             }
             catch
             {
                 return false;
             }
+        }
+
+        private async Task<bool> ProcessPageResponse(WebAgent.HttpResponse response)
+        {
+            if (response.IsPage)
+            {
+                TargetNode = new SimplePageParser
+                {
+                    Owner = Owner,
+                    Url = Url,
+                    InducingAction = this,
+                    Level = Level + 1,
+                    Page = response.PageContent
+                };
+                Owner.AddObject(TargetNode);
+#if !NO_WRITE_ORIG_PAGE
+                var folder = await LocalDirectory.GetOrCreateFolderAsync();
+                var file = await folder.CreateNewFileAsync(LocalFileName);
+                using (var outputStream = await file.OpenStreamForWriteAsync())
+                {
+                    using (var sw = new StreamWriter(outputStream))
+                    {
+                        sw.Write(response.PageContent);
+                    }
+                }
+#endif
+            }
+            else if (response.IsSession)
+            {
+                return false;
+            }
+            else
+            {
+                var folder = await LocalDirectory.GetOrCreateFolderAsync();
+                var file = await folder.CreateNewFileAsync(LocalFileName);
+                using (var outputStream = await file.OpenStreamForWriteAsync())
+                {
+                    await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);
+                    await outputStream.FlushAsync();
+                }
+            }
+            return true;
+        }
+        
+        private async Task<bool> DownloadSesional(WebAgent agent, string hostName, string path, WebAgent.HttpResponse response)
+        {
+            var location = response.Location;
+            var token = GetTokenFromUrlInResponse(location);
+            var sbRequest = new StringBuilder();
+            sbRequest.AddParameterFormat(@"GET /?responseToken={0} HTTP/1.1", token);
+            sbRequest.AddParameter(@"Accept:  text/html, application/xhtml+xml, */*");
+            sbRequest.AddParameter(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
+            sbRequest.AddParameter(@"UserAgent:  Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
+            sbRequest.AddParameter(@"Accept-Encoding: gzip,deflate");
+            // NOTE host name remains the same
+            sbRequest.AddParameterFormat(@"Host: {0}", hostName);
+            // TODO we should check response to see if cookie is enabled. Here we are being slack and assuming it is
+            sbRequest.AddParameter(@"Cookie: test=1");
+            sbRequest.AddParameter(@"DNT: 1");
+            sbRequest.AddParameter(@"Connection: keep-alive");
+            sbRequest.ConcludeRequest();
+
+            var request = sbRequest.ToString();
+            var r = await agent.SendRequest(request);
+            if (!r)
+            {
+                return false;
+            }
+
+            var cookieResponse = await agent.GetResponse();
+            var cookie = GetCookieFromResponse(cookieResponse.SetCookie);
+
+            sbRequest.Clear();
+            sbRequest.AddParameterFormat(@"GET {0} HTTP/1.1", path);
+            sbRequest.AddParameter(@"Accept:  text/html, application/xhtml+xml, */*");
+            sbRequest.AddParameter(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
+            sbRequest.AddParameter(@"UserAgent:  Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
+            sbRequest.AddParameter(@"Accept-Encoding: gzip,deflate");
+            sbRequest.AddParameterFormat(@"Cookie: test=1; slave={0}", cookie);
+            sbRequest.AddParameterFormat(@"Host: {0}", hostName);
+            sbRequest.AddParameter(@"DNT: 1");
+            sbRequest.AddParameter(@"Connection: keep-alive");
+            Owner.AddObject(TargetNode);
+
+            request = sbRequest.ToString();
+            r = await agent.SendRequest(request);
+            if (!r)
+            {
+                return false;
+            }
+
+            var pageResponse = await agent.GetResponse();
+            return await ProcessPageResponse(pageResponse);
+        }
+
+        private static string GetTokenFromUrlInResponse(string location)
+        {
+            var eqSign = location.LastIndexOf('=');
+            if (eqSign < 0)
+            {
+                return "";
+            }
+            return location.Substring(eqSign + 1);
+        }
+
+        private static string GetCookieFromResponse(string cookie)
+        {
+            if (cookie == null)
+            {
+                return null;
+            }
+            var start = cookie.IndexOf("slave=", System.StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return null;
+            }
+            start += "slave=".Length;
+            var end = cookie.IndexOf(";", start, System.StringComparison.Ordinal);
+            if (end < 0)
+            {
+                end = cookie.Length;
+            }
+            return cookie.Substring(start, end - start);
         }
 
         #endregion
