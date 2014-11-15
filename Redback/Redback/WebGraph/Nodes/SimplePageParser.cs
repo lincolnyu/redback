@@ -253,7 +253,8 @@ namespace Redback.WebGraph.Nodes
                                 Level = Level + 1,
                                 Url = link,
                                 LocalDirectory = dir,
-                                LocalFileName = fileName
+                                LocalFileName = fileName,
+                                UseReferrer = true
                             };
 
                             Actions.Add(download);

@@ -9,6 +9,12 @@ namespace Redback.WebGraph.Actions
 {
     public class MySocketDownloader : BaseDownloader
     {
+        #region Properties
+
+        public bool UseReferrer { get; set; }
+
+        #endregion
+
         #region Methods
 
         #region BaseAction members
@@ -45,14 +51,17 @@ namespace Redback.WebGraph.Actions
             // TODO      text/css for css
             // TODO      image/png, image/svg+xml, image/* for images
             // NOTE however as far as */* is included, the it's supposed to be able to accept anything
-            sbRequest.AddParameter(@"Accept:  text/html, application/xhtml+xml, */*");
-            sbRequest.AddParameterFormat(@"Referer: http://{0}/", hostName);
-            sbRequest.AddParameter(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
-            sbRequest.AddParameter(@"UserAgent:  Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
-            sbRequest.AddParameter(@"Accept-Encoding: gzip,deflate");
+            sbRequest.AddParameter(@"Accept: text/html, application/xhtml+xml, */*");
+            if (UseReferrer)
+            {
+                sbRequest.AddParameterFormat(@"Referer: http://{0}/", hostName);
+            }
+            sbRequest.AddParameter(@"Accept-Language: en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
+            sbRequest.AddParameter(@"User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
+            sbRequest.AddParameter(@"Accept-Encoding: gzip, deflate");
             sbRequest.AddParameterFormat(@"Host: {0}", hostName);
             sbRequest.AddParameter(@"DNT: 1");
-            sbRequest.AddParameter(@"Connection: keep-alive");
+            sbRequest.AddParameter(@"Connection: Keep-Alive");
             sbRequest.ConcludeRequest();
 
             try
@@ -122,56 +131,73 @@ namespace Redback.WebGraph.Actions
             }
             return true;
         }
-        
+
         private async Task<bool> ProcessSessionalPage(WebAgent agent, string hostName, string path, WebAgent.HttpResponse response)
         {
-            var location = response.Location;
-            var token = GetTokenFromUrlInResponse(location);
-            var sbRequest = new StringBuilder();
-            sbRequest.AddParameterFormat(@"GET /?responseToken={0} HTTP/1.1", token);
-            sbRequest.AddParameter(@"Accept:  text/html, application/xhtml+xml, */*");
-            sbRequest.AddParameter(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
-            sbRequest.AddParameter(@"UserAgent:  Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
-            sbRequest.AddParameter(@"Accept-Encoding: gzip,deflate");
-            // NOTE host name remains the same
-            sbRequest.AddParameterFormat(@"Host: {0}", hostName);
-            // TODO we should check response to see if cookie is enabled. Here we are being slack and assuming it is
-            sbRequest.AddParameter(@"Cookie: test=1");
-            sbRequest.AddParameter(@"DNT: 1");
-            sbRequest.AddParameter(@"Connection: keep-alive");
-            sbRequest.ConcludeRequest();
-
-            var request = sbRequest.ToString();
-            var r = await agent.SendRequest(request);
-            if (!r)
+            var recursive = 0;
+            const int maxAttempt = 5;
+            while (recursive < maxAttempt)
             {
-                return false;
+                var location = response.Location;
+                var token = GetTokenFromUrlInResponse(location);
+                var sbRequest = new StringBuilder();
+                sbRequest.AddParameterFormat(@"GET /?responseToken={0} HTTP/1.1", token);
+                sbRequest.AddParameter(@"Accept: text/html, application/xhtml+xml, */*");
+                sbRequest.AddParameter(@"Accept-Language: en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
+                sbRequest.AddParameter(@"User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
+                sbRequest.AddParameter(@"Accept-Encoding: gzip, deflate");
+                sbRequest.AddParameter(@"DNT: 1");
+                // NOTE host name remains the same
+                sbRequest.AddParameterFormat(@"Host: {0}", hostName);
+                // TODO we should check response to see if cookie is enabled. Here we are being slack and assuming it is
+                sbRequest.AddParameter(@"Connection: Keep-Alive");
+                sbRequest.AddParameter(@"Cookie: test=1");
+                sbRequest.ConcludeRequest();
+
+                var request = sbRequest.ToString();
+                var r = await agent.SendRequest(request);
+                if (!r)
+                {
+                    return false;
+                }
+
+                response = await agent.GetResponse();
+
+                var cookie = GetCookieFromResponse(response.SetCookie);
+
+                if (cookie == null)
+                {
+                    if (!response.IsSession)
+                    {
+                        return false;
+                    }
+                    recursive = recursive + 1;
+                    continue;
+                }
+
+                sbRequest.Clear();
+                sbRequest.AddParameterFormat(@"GET {0} HTTP/1.1", path);
+                sbRequest.AddParameter(@"Accept: text/html, application/xhtml+xml, */*");
+                sbRequest.AddParameter(@"Accept-Language: en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
+                sbRequest.AddParameter(@"User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
+                sbRequest.AddParameter(@"Accept-Encoding: gzip,deflate");
+                sbRequest.AddParameterFormat(@"Cookie: test=1; slave={0}", cookie);
+                sbRequest.AddParameterFormat(@"Host: {0}", hostName);
+                sbRequest.AddParameter(@"Connection: Keep-Alive");
+                sbRequest.AddParameter(@"DNT: 1");
+                Owner.AddObject(TargetNode);
+
+                request = sbRequest.ToString();
+                r = await agent.SendRequest(request);
+                if (!r)
+                {
+                    return false;
+                }
+
+                var pageResponse = await agent.GetResponse();
+                return await ProcessPageResponse(pageResponse);
             }
-
-            var cookieResponse = await agent.GetResponse();
-            var cookie = GetCookieFromResponse(cookieResponse.SetCookie);
-
-            sbRequest.Clear();
-            sbRequest.AddParameterFormat(@"GET {0} HTTP/1.1", path);
-            sbRequest.AddParameter(@"Accept:  text/html, application/xhtml+xml, */*");
-            sbRequest.AddParameter(@"Accept-Language:  en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
-            sbRequest.AddParameter(@"UserAgent:  Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
-            sbRequest.AddParameter(@"Accept-Encoding: gzip,deflate");
-            sbRequest.AddParameterFormat(@"Cookie: test=1; slave={0}", cookie);
-            sbRequest.AddParameterFormat(@"Host: {0}", hostName);
-            sbRequest.AddParameter(@"DNT: 1");
-            sbRequest.AddParameter(@"Connection: keep-alive");
-            Owner.AddObject(TargetNode);
-
-            request = sbRequest.ToString();
-            r = await agent.SendRequest(request);
-            if (!r)
-            {
-                return false;
-            }
-
-            var pageResponse = await agent.GetResponse();
-            return await ProcessPageResponse(pageResponse);
+            return false;
         }
 
         private static string GetTokenFromUrlInResponse(string location)
