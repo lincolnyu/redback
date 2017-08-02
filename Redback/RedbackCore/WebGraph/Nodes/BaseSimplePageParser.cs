@@ -250,7 +250,9 @@ namespace Redback.WebGraph.Nodes
                             Owner.SetHasDownloaded(link);
                         }
 
-                        var fileUrl = string.Format("\"file:///{0}\"", dir);
+                        var urlDir = dir.Replace('\\', '/').TrimEnd('/');
+                        // TODO need relative
+                        var fileUrl = $"'file:///{urlDir}/{fileName}'";
                         sbOutputPage.Append(fileUrl);
                     }
                     catch (ArgumentException)
