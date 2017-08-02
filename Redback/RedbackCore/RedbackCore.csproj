@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard1.4</TargetFramework>
+    <RootNamespace>Redback</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\qsharp\QSharp\QSharp.Scheme.Classical.Trees\QSharp.Scheme.Classical.Trees.csproj" />
+  </ItemGroup>
+
+</Project>

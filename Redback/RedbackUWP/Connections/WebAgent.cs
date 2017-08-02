@@ -5,12 +5,15 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Threading.Tasks;
-using System.Net.Sockets;
 using Redback.Helpers;
+using Windows.Storage.Streams;
+using Windows.Networking.Sockets;
+using Windows.Networking;
+using Windows.Networking.Connectivity;
 
 namespace Redback.Connections
 {
-    public class WebAgent
+    public class WebAgent : IWebAgent
     {
         #region Delegates
 

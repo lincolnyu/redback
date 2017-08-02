@@ -1,9 +1,11 @@
-﻿using Windows.Storage;
-using Windows.UI.Xaml;
-using Redback.Helpers;
+﻿using Redback.Helpers;
 using Redback.WebGraph;
+using Windows.Storage;
+using Windows.UI.Xaml;
 
-namespace WebDownloader
+// The Blank Page item template is documented at https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
+
+namespace WebDownloaderUWP
 {
     /// <summary>
     /// An empty page that can be used on its own or navigated to within a Frame.
@@ -63,7 +65,7 @@ namespace WebDownloader
                     ? string.Format("Failed to perform action with url '{0}', error being '{1}'", url, args.ErrorMessage)
                     : string.Format("Failed to analyze node with url '{0}', error being '{1}'", url, args.ErrorMessage);
             }
-// ReSharper disable once PossibleNullReferenceException
+            // ReSharper disable once PossibleNullReferenceException
             LstTasks.Items.Add(msg);
         }
 
