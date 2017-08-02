@@ -212,8 +212,8 @@ namespace Redback.Connections
 
                 // TODO make sure 'Accept-Ranges' is byte?
 
-                var contentType = header.GetParameter("Content-Type:");
-                var contentEncoding = header.GetParameter("Content-Encoding:");
+                var contentType = header.GetParameter("Content-Type:")?? "";
+                var contentEncoding = header.GetParameter("Content-Encoding:") ?? "";
 
                 byte[] data;
                 uint contentLength;

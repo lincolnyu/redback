@@ -101,7 +101,9 @@ namespace Redback.WebGraph.Nodes
             }
             else
             {
-                return null;
+                // otherwise just use baseAddr as-is
+                basePrefix = "http://";
+                baseAddr = baseUrl.TrimEnd('/');
             }
 
             List<string> addrSegs;

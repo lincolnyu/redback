@@ -69,6 +69,11 @@ namespace Redback.Helpers
                 {
                     directory = sbDirectory.ToString();
                     fileName = segs[segs.Length - 1];
+                    if (string.IsNullOrWhiteSpace(fileName))
+                    {
+                        // TODO this should be ok but who knows
+                        fileName = "index.html";
+                    }
                 }
                 else
                 {
