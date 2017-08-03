@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Redback.Helpers;
@@ -80,99 +77,6 @@ namespace Redback.WebGraph.Nodes
             return end + 1;
         }
 
-        private string GetAbsoluteUrl(string baseUrl, string link)
-        {
-            if (link.StartsWith("http://") || link.StartsWith("https://"))
-            {
-                return link;
-            }
-
-            string baseAddr;
-            string basePrefix;
-            if (baseUrl.StartsWith("http://"))
-            {
-                basePrefix = "http://";
-                baseAddr = baseUrl.Substring("http://".Length);
-            }
-            else if (baseUrl.StartsWith("https://"))
-            {
-                basePrefix = "https://";
-                baseAddr = baseUrl.Substring("https://".Length);
-            }
-            else
-            {
-                // otherwise just use baseAddr as-is
-                basePrefix = "http://";
-                baseAddr = baseUrl.TrimEnd('/');
-            }
-
-            List<string> addrSegs;
-            if (link.StartsWith("/"))
-            {
-                var firstSlash = baseAddr.IndexOf('/');
-                if (firstSlash < 0) firstSlash = baseAddr.Length;
-                var hostName = baseAddr.Substring(0, firstSlash);
-                addrSegs = new List<string> {hostName};
-                link = link.TrimStart('/');
-                var linkSegs = link.Split('/');
-                foreach (var linkSeg in linkSegs)
-                {
-                    switch (linkSeg)
-                    {
-                        case "..":
-                            addrSegs.RemoveAt(addrSegs.Count - 1);
-                            break;
-                        case ".":
-                            break;
-                        default:
-                            addrSegs.Add(linkSeg);
-                            break;
-                    }
-                }
-            }
-            else
-            {
-                addrSegs = baseAddr.Split('/').ToList();
-                if (addrSegs.Count > 1)
-                {
-                    addrSegs.RemoveAt(addrSegs.Count - 1);
-                }
-                var linkToSeg = link.TrimEnd('/');
-                var linkSegs = linkToSeg.Split('/');
-                foreach (var linkSeg in linkSegs)
-                {
-                    switch (linkSeg)
-                    {
-                        case "..":
-                            if (addrSegs.Count < 2)
-                            {
-                                return null;
-                            }
-                            addrSegs.RemoveAt(addrSegs.Count-1);
-                            break;
-                        case ".":
-                            break;
-                        default:
-                            addrSegs.Add(linkSeg);
-                            break;
-                    }
-                }
-            }
-            var sbAddr = new StringBuilder();
-            sbAddr.Append(basePrefix);
-            foreach (var addrSeg in addrSegs)
-            {
-                sbAddr.Append(addrSeg);
-                sbAddr.Append('/');
-            }
-
-            if (addrSegs.Count > 1 && !link.EndsWith("/"))
-            {
-                sbAddr.Remove(sbAddr.Length - 1, 1);
-            }
-            return sbAddr.ToString();
-        }
-
         public override async Task Analyze()
         {
             var lastIndex = 0;
@@ -222,7 +126,7 @@ namespace Redback.WebGraph.Nodes
                 var linkEnd = GetLink(Page, index, out string link); // one character after closing double quotation mark 
                 if (linkEnd >= 0)
                 {
-                    var absLink = GetAbsoluteUrl(Url, link);
+                    var absLink = UrlHelper.GetAbsoluteUrl(Url, link);
                     link = absLink;
                 }
                 if (linkEnd < 0 || link == null)
@@ -244,16 +148,14 @@ namespace Redback.WebGraph.Nodes
                         if (!Owner.HasDownloaded(link))
                         {
                             var download = CreateDownloader(link, dir, fileName);
-
                             Actions.Add(download);
                             Owner.AddObject(download);
                             Owner.SetHasDownloaded(link);
                         }
 
-                        var urlDir = dir.Replace('\\', '/').TrimEnd('/');
-                        // TODO need relative
-                        var fileUrl = $"'file:///{urlDir}/{fileName}'";
-                        sbOutputPage.Append(fileUrl);
+                        var fileUrl = UrlHelper.GetFileRelative(Url, link);
+                        var u = $"\"{fileUrl}\"";
+                        sbOutputPage.Append(u);
                     }
                     catch (ArgumentException)
                     {
