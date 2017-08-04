@@ -7,13 +7,45 @@ namespace Redback.Helpers
 {
     public static class UrlHelper
     {
+        #region Types
+
+        public enum UrlType
+        {
+            Absolute,
+            Rootbased,
+            Relative
+        }
+
+        #endregion
+
         #region Properties
 
         public const char DirectorySeparator = '\\';
 
+        public const string Http = "http://";
+        public const string Https = "https://";
+
         #endregion
 
         #region Methods
+
+        public static UrlType GetUrlType(this string link)
+        {
+            if (link.StartsWith(".")) // including ./ and ../
+            {
+                return UrlType.Relative;
+            }
+            if (link.StartsWith("/"))
+            {
+                return UrlType.Rootbased;
+            }
+            if (link.StartsWith(Http, StringComparison.OrdinalIgnoreCase)
+                || link.StartsWith(Https, StringComparison.OrdinalIgnoreCase))
+            {
+                return UrlType.Absolute;
+            }
+            return UrlType.Relative;
+        }
 
         /// <summary>
         ///  Returns the absolute URL of <paramref name="link"/> based on <paramref name="baseUrl"/>
@@ -23,29 +55,93 @@ namespace Redback.Helpers
         /// <param name="baseUrl">The base URL</param>
         /// <param name="link">The URL to get the absolute URL for</param>
         /// <returns>The absolute URL</returns>
-        public static string GetAbsoluteUrl(string baseUrl, string link)
+        public static string GetAbsoluteUrl(this string orig, string url)
         {
-            if (link.StartsWith("http://") || link.StartsWith("https://"))
+            var urlType = url.GetUrlType();
+            if (urlType == UrlType.Absolute)
+            {
+                return url;
+            }
+            if (urlType == UrlType.Rootbased)
+            {
+                var baseUrl = orig.GetBaseUrl();
+                return baseUrl + url;
+            }
+            return CombineUrl(orig, url);
+        }
+
+        private static string CombineUrl(string abs, string b)
+        {
+            abs.GetHostSeparators(out int dummy, out int slash);
+            var patha = slash >= abs.Length? "" : abs.Substring(slash + 1);
+            var heada = abs.Substring(0, slash);
+            var segsa = patha.Split('/');
+            var segsb = b.Split('/');
+            var ai = segsa.Length-1;
+            var eliminating = true;
+            var sb = new StringBuilder();
+            foreach (var segb in segsb)
+            {
+                if (eliminating)
+                {
+                    if (segb == "..")
+                    {
+                        ai--;
+                    }
+                    else if (segb != ".")
+                    {
+                        sb.Append(heada);
+                        for (var i = 0; i < ai; i++)
+                        {
+                            sb.Append('/');
+                            sb.Append(segsa[i]);
+                        }
+                        eliminating = false;
+                    }
+                }
+                if (!eliminating)
+                {
+                    sb.Append('/');
+                    sb.Append(segb);
+                }
+            }
+            return sb.ToString();
+        }
+
+
+        /// <summary>
+        ///  Returns the absolute URL of <paramref name="link"/> based on <paramref name="baseUrl"/>
+        ///  For instance, for base URL http://www.contoso.com/something.html the absolute URL of 
+        ///  ./foo/bar.html is http://www.contoso.com/foo/bar.html
+        /// </summary>
+        /// <param name="baseUrl">The base URL</param>
+        /// <param name="link">The URL to get the absolute URL for</param>
+        /// <param name="enforcePrefix">Add prefix if not existent in <paramref name="baseUrl"/></param>
+        /// <returns>The absolute URL</returns>
+        public static string GetAbsoluteUrl2(string baseUrl, string link, bool enforcePrefix = true)
+        {
+            if (link.StartsWith(Http, StringComparison.OrdinalIgnoreCase)
+                || link.StartsWith(Https, StringComparison.OrdinalIgnoreCase))
             {
                 return link;
             }
 
             string baseAddr;
             string basePrefix;
-            if (baseUrl.StartsWith("http://"))
+            if (baseUrl.StartsWith(Http, StringComparison.OrdinalIgnoreCase))
             {
-                basePrefix = "http://";
-                baseAddr = baseUrl.Substring("http://".Length);
+                basePrefix = Http;
+                baseAddr = baseUrl.Substring(Http.Length);
             }
-            else if (baseUrl.StartsWith("https://"))
+            else if (baseUrl.StartsWith(Https, StringComparison.OrdinalIgnoreCase))
             {
-                basePrefix = "https://";
-                baseAddr = baseUrl.Substring("https://".Length);
+                basePrefix = Https;
+                baseAddr = baseUrl.Substring(Https.Length);
             }
             else
             {
                 // otherwise just use baseAddr as-is
-                basePrefix = "http://";
+                basePrefix = enforcePrefix? Http : "";
                 baseAddr = baseUrl.TrimEnd('/');
             }
 
@@ -116,36 +212,66 @@ namespace Redback.Helpers
             return sbAddr.ToString();
         }
 
-        public static bool UrlToHostName(this string url, out string prefix, out string hostName, out string path)
+        private static void GetHostSeparators(this string abs, out int endPrefix, out int rootSlash)
         {
-            var urlLc = url.ToLower();
-            string processed;
-            if (urlLc.StartsWith("http://"))
+            endPrefix = 0;
+            if (abs.StartsWith(Http, StringComparison.OrdinalIgnoreCase))
             {
-                processed = urlLc.Substring("http://".Length);
-                prefix = "http://";
+                endPrefix = Http.Length;
             }
-            else if (urlLc.StartsWith("https://"))
+            else if (abs.StartsWith(Http, StringComparison.OrdinalIgnoreCase))
             {
-                processed = urlLc.Substring("https://".Length);
-                prefix = "https://";
+                endPrefix = Http.Length;
             }
-            else
+            rootSlash = abs.IndexOf('/', endPrefix);
+            if (rootSlash < 0)
             {
-                processed = urlLc;
-                prefix = "http://";
+                rootSlash = abs.Length;
             }
-            var end = processed.IndexOf('/');
-            if (end >= 0)
-            {
-                hostName = processed.Substring(0, end);
-                path = processed.Substring(end);
-                return true;
-            }
+        }
 
-            hostName = processed;
-            path = "";
-            return true;
+        /// <summary>
+        ///  Get the base url (excluding the tailing /)
+        /// </summary>
+        /// <param name="abs">The original url</param>
+        /// <returns>The base url</returns>
+        public static string GetBaseUrl(this string abs)
+        {
+            abs.GetHostSeparators(out int dummy, out int rootSlash);
+            return abs.Substring(0, rootSlash);
+        }
+
+        /// <summary>
+        ///  Removes prefix of base to get the host address
+        /// </summary>
+        /// <param name="baseUrl">Base URL returned from GetBaseUrl</param>
+        /// <returns>The host</returns>
+        public static string BaseUrlToHost(this string baseUrl)
+        {
+            if (baseUrl.StartsWith(Http, StringComparison.OrdinalIgnoreCase))
+            {
+                return baseUrl.Remove(0, Http.Length).Trim('/');
+            }
+            else if (baseUrl.StartsWith(Https, StringComparison.Ordinal))
+            {
+                return baseUrl.Remove(0, Https.Length).Trim('/');
+            }
+            return baseUrl.Trim('/');
+        }
+
+        /// <summary>
+        ///  Gets the host name of the URL
+        /// </summary>
+        /// <param name="url">The URL</param>
+        /// <param name="prefix">The prefix such as http:// or https://</param>
+        /// <param name="hostName">The host name part</param>
+        /// <param name="path">The path part</param>
+        public static void UrlToHostName(this string url, out string prefix, out string hostName, out string path)
+        {
+            url.GetHostSeparators(out int endPrefix, out int rootSlash);
+            prefix = url.Substring(0, endPrefix);
+            hostName = url.Substring(endPrefix, rootSlash - endPrefix);
+            path = url.Substring(rootSlash);
         }
 
         /// <summary>
@@ -154,20 +280,20 @@ namespace Redback.Helpers
         ///   directory: "www.contoso.com\foo" (No trailing back slash)
         ///   file: bar.asp
         /// </summary>
-        /// <param name="url"></param>
-        /// <param name="directory"></param>
-        /// <param name="fileName"></param>
-        /// <returns></returns>
+        /// <param name="url">The URL</param>
+        /// <param name="directory">The directory to put the downloaded content in as per the URL</param>
+        /// <param name="fileName">The file name of the downloaded content</param>
+        /// <returns>True if successful</returns>
         public static bool UrlToFilePath(this string url, out string directory, out string fileName)
         {
             url = url.Trim().ToLower();
-            if (url.StartsWith("http://"))
+            if (url.StartsWith(Http))
             {
-                url = url.Substring("http://".Length);
+                url = url.Substring(Http.Length);
             }
-            else if (url.StartsWith("https://"))
+            else if (url.StartsWith(Https))
             {
-                url = url.Substring("https://".Length);
+                url = url.Substring(Https.Length);
             }
             var segs = url.Split('/');
             var sbDirectory = new StringBuilder();

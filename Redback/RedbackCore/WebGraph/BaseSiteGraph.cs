@@ -188,17 +188,23 @@ namespace Redback.WebGraph
 
         private bool IsOnHostOrReferencedByHostPage(GraphObject x)
         {
-            if (x is IHasUrl hasUrl && hasUrl.Url.UrlToHostName(out string dummy, out string hostName, out dummy) && hostName == StartHost)
+            string dummy, hostName;
+            if (x is IHasUrl hasUrl)
             {
-                return true;
+                hasUrl.Url.UrlToHostName(out dummy, out hostName, out dummy);
+                if (hostName == StartHost)
+                {
+                    return true;
+                }
             }
 
             var action = x as BaseAction;
-            if (action == null || !action.SourceNode.Url.UrlToHostName(out dummy, out hostName, out dummy))
+            if (action == null)
             {
                 return false;
             }
 
+            action.SourceNode.Url.UrlToHostName(out dummy, out hostName, out dummy);
             return hostName == StartHost;
         }
 
