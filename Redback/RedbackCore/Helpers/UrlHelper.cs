@@ -48,23 +48,59 @@ namespace Redback.Helpers
         }
 
         /// <summary>
+        ///  Returns the URL with the redundant slashes removed
+        /// </summary>
+        /// <param name="url">The original url</param>
+        /// <returns>The cleaned url</returns>
+        public static string RemoveRedundantSlashesInUrl(this string url)
+        {
+            GetHostSeparators(url, out int endPrefix, out int rootSlash);
+            var sb = new StringBuilder(url.Substring(0, endPrefix));
+            var lastIsSlash = false;
+            for (var i = endPrefix; i< url.Length; i++)
+            {
+                var c = url[i];
+                if (c == '/')
+                {
+                    if (!lastIsSlash)
+                    {
+                        sb.Append(c);
+                    }
+                    lastIsSlash = true;
+                }
+                else
+                {
+                    sb.Append(c);
+                    lastIsSlash = false;
+                }
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
         ///  Returns the absolute URL of <paramref name="link"/> based on <paramref name="baseUrl"/>
         ///  For instance, for base URL http://www.contoso.com/something.html the absolute URL of 
         ///  ./foo/bar.html is http://www.contoso.com/foo/bar.html
         /// </summary>
         /// <param name="baseUrl">The base URL</param>
         /// <param name="link">The URL to get the absolute URL for</param>
+        /// <param name="enforcePrefix"></param>
         /// <returns>The absolute URL</returns>
-        public static string GetAbsoluteUrl(this string orig, string url)
+        public static string GetAbsoluteUrl(this string orig, string url, bool enforcePrefix = true)
         {
             var urlType = url.GetUrlType();
             if (urlType == UrlType.Absolute)
             {
                 return url;
             }
+            orig.GetHostSeparators(out int endPrefix, out int rootSlash);
+            if (enforcePrefix && endPrefix == 0)
+            {
+                orig = Http + orig;
+            }
             if (urlType == UrlType.Rootbased)
             {
-                var baseUrl = orig.GetBaseUrl();
+                var baseUrl = orig.Substring(0, rootSlash);
                 return baseUrl + url;
             }
             return CombineUrl(orig, url);
