@@ -72,6 +72,10 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\RedbackCoreLite\RedbackCoreLite.csproj">
+      <Project>{01b732cb-bf3f-4f3a-b61c-9eff5d8e0322}</Project>
+      <Name>RedbackCoreLite</Name>
+    </ProjectReference>
     <ProjectReference Include="..\RedbackCore\RedbackCore.csproj">
       <Project>{4B3C600E-AA88-48D5-8B97-A7CF35E7ACBE}</Project>
       <Name>RedbackCore</Name>

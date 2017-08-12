@@ -129,6 +129,10 @@
       <Project>{a297c131-4fab-4f8f-b9b8-b5048fc12236}</Project>
       <Name>QSharp.Scheme.Classical.Trees</Name>
     </ProjectReference>
+    <ProjectReference Include="..\RedbackCoreLite\RedbackCoreLite.csproj">
+      <Project>{01b732cb-bf3f-4f3a-b61c-9eff5d8e0322}</Project>
+      <Name>RedbackCoreLite</Name>
+    </ProjectReference>
     <ProjectReference Include="..\RedbackCore\RedbackCore.csproj">
       <Project>{4b3c600e-aa88-48d5-8b97-a7cf35e7acbe}</Project>
       <Name>RedbackCore</Name>

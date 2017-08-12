@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\qsharp\QSharp\QSharp.Scheme.Classical.Trees\QSharp.Scheme.Classical.Trees.csproj" />
+    <ProjectReference Include="..\RedbackCoreLite\RedbackCoreLite.csproj" />
   </ItemGroup>
 
 </Project>
