@@ -214,6 +214,8 @@ namespace Redback.Connections
 
                 var contentType = header.GetParameter("Content-Type:")?? "";
                 var contentEncoding = header.GetParameter("Content-Encoding:") ?? "";
+                var location = header.GetParameter("Location:");
+                var cache = header.GetParameter("Cache-Control:");
 
                 byte[] data;
                 uint contentLength;
@@ -251,15 +253,13 @@ namespace Redback.Connections
 
                     if (contentLength > 0)
                     {
-                    await _reader.LoadAsync(contentLength);
-                    _reader.ReadBytes(data);
+                        await _reader.LoadAsync(contentLength);
+                        _reader.ReadBytes(data);
                     }
                     else
                     {
                         // session
                         var cookie = header.GetParameter("Set-Cookie:");
-                        var location = header.GetParameter("Location:");
-                        var cache = header.GetParameter("Cache-Control:");
                         var expires = header.GetParameter("Expires:");
                         var pragma = header.GetParameter("Pragma:");
                         var xwhom = header.GetParameter("X-Whom:");
@@ -285,6 +285,8 @@ namespace Redback.Connections
                 {
                     ContentType = contentType,
                     ContentLength = contentLength,
+                    Location = location,
+                    CacheControl = cache
                 };
 
                 if (contentEncoding.Contains("gzip"))
