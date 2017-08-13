@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using QSharp.Scheme.Classical.Trees;
 using Redback.Connections;
 using Redback.Helpers;
+using System.Threading.Tasks;
 
 namespace Redback.WebGraph
 {
@@ -121,7 +122,7 @@ namespace Redback.WebGraph
 
         #region Methods
 
-        public async void Run()
+        public async Task Run()
         {
             while (!_queuedObjects.IsEmpty)
             {
