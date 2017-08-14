@@ -20,7 +20,7 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" Name="TxtUrl" Margin="10,0,10,0" Height="30" />
+            <TextBox Grid.Column="0" Name="TxtUrl" Margin="10,0,10,0" Height="30" KeyDown="TxtUrlKeyDown" />
             <Button Grid.Column="1" Content="Go" Click="BtnGoOnClick"/>
             <CheckBox Grid.Column="2" Name="WithinHost" Margin="10,0,10,0">Within host only</CheckBox>
         </Grid>

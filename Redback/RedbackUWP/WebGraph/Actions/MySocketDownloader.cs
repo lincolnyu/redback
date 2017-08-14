@@ -74,6 +74,12 @@ namespace Redback.WebGraph.Actions
 
                 var response = await agent.GetResponse();
 
+                if (!string.IsNullOrWhiteSpace(response.Location))
+                {
+                    // Update to the most accurate URL
+                    Url = response.Location;
+                }
+
                 if (response.IsSession)
                 {
                     return await ProcessSessionalPage(agent, hostName, path, response);

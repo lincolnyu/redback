@@ -1,7 +1,10 @@
 ﻿using Redback.Helpers;
 using Redback.WebGraph;
+using Windows.System;
 using Windows.Storage;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Input;
+using System.Threading.Tasks;
 
 // The Blank Page item template is documented at https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -16,6 +19,8 @@ namespace WebDownloaderUWP
 
         private IStorageFolder _downloadFolder;
 
+        private bool _searching = false;
+
         #endregion
 
         #region Methods
@@ -27,8 +32,27 @@ namespace WebDownloaderUWP
             TxtAppDataFolder.Text = ApplicationData.Current.LocalFolder.Path;
         }
 
+        private async void TxtUrlKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == VirtualKey.Enter)
+            {
+                await Start();
+            }
+        }
+
         private async void BtnGoOnClick(object sender, RoutedEventArgs e)
         {
+            await Start();
+        }
+
+        private async Task Start()
+        {
+            if (_searching)
+            {
+                return;
+            }
+            _searching = true;
+
             var d = ApplicationData.Current;
             var storage = d.LocalFolder;
 
@@ -39,7 +63,9 @@ namespace WebDownloaderUWP
 
             webTask.ObjectProcessed += WebTaskOnObjectProcessed;
 
-            webTask.Run();
+            await webTask.Run();
+
+            _searching = false;
         }
 
         private void WebTaskOnObjectProcessed(object sender, SiteGraph.ObjectProcessedEventArgs args)

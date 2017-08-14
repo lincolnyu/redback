@@ -124,11 +124,6 @@ namespace Redback.WebGraph.Nodes
                 }
 
                 var linkEnd = GetLink(Page, index, out string link); // one character after closing double quotation mark 
-                if (linkEnd >= 0)
-                {
-                    var absLink = UrlHelper.GetAbsoluteUrl(Url, link);
-                    link = absLink;
-                }
                 if (linkEnd < 0 || link == null)
                 {
                     var sb = Page.Substring(lastIndex, index - lastIndex);
@@ -136,31 +131,43 @@ namespace Redback.WebGraph.Nodes
                     lastIndex = index;
                     continue;
                 }
+                var absLink = UrlHelper.GetAbsoluteUrl(Url, link);
+                link = absLink;
 
                 var stringBetween = Page.Substring(lastIndex, index - lastIndex);
                 sbOutputPage.Append(stringBetween);
 
-                if (link.UrlToFilePath(out string dir, out string fileName))
+                var downloaded = Owner.HasDownloaded(link);
+                try
                 {
-                    try
+                    // check to see if the link has been downloaded
+                    if (!downloaded)
                     {
-                        // check to see if the link has been downloaded
-                        if (!Owner.HasDownloaded(link))
+                        var download = CreateDownloader(link);
+                        if (download != null)
                         {
-                            var download = CreateDownloader(link, dir, fileName);
                             Actions.Add(download);
                             Owner.AddObject(download);
                             Owner.SetHasDownloaded(link);
+                            downloaded = true;
                         }
+                    }
+                }
+                catch (ArgumentException)
+                {
+                    // skip this link which is probably invalid
+                }
 
-                        var fileUrl = UrlHelper.GetFileRelative(Url, link);
-                        var u = $"\"{fileUrl}\"";
-                        sbOutputPage.Append(u);
-                    }
-                    catch (ArgumentException)
-                    {
-                        // skip this link which is probably invalid
-                    }
+                if (downloaded)
+                {
+                    var fileUrl = UrlHelper.GetFileRelative(Url, link);
+                    var u = $"\"{fileUrl}\"";
+                    sbOutputPage.Append(u);
+                }
+                else
+                {
+                    // have to use original
+                    sbOutputPage.Append(Page.Substring(index, linkEnd));
                 }
 
                 lastIndex = linkEnd;
@@ -176,7 +183,7 @@ namespace Redback.WebGraph.Nodes
             }
         }
 
-        protected abstract BaseAction CreateDownloader(string link, string dir, string fileName);
+        protected abstract BaseAction CreateDownloader(string link);
 
         #endregion
     }
