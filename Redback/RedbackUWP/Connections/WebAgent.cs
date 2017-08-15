@@ -10,6 +10,7 @@ using Windows.Storage.Streams;
 using Windows.Networking.Sockets;
 using Windows.Networking;
 using Windows.Networking.Connectivity;
+using Windows.Security.Cryptography.Certificates;
 
 namespace Redback.Connections
 {
@@ -77,6 +78,7 @@ namespace Redback.Connections
         private DataWriter _writer;
 
         private DataReader _reader;
+        private bool _socketConnected;
 
         #endregion
 
@@ -95,12 +97,15 @@ namespace Redback.Connections
         {
             get; private set;
         }
-        
+
+        public TimeSpan PlainTextTimeout = TimeSpan.FromMilliseconds(500);
+        public TimeSpan HttpsTimeout = TimeSpan.FromMilliseconds(500);
+
         #endregion
 
         #region Methods
 
-        public async Task<bool> SocketConnect()
+        public async Task<bool> SocketConnect(bool https = false)
         {
             HostName hostName;
             try
@@ -113,21 +118,44 @@ namespace Redback.Connections
             }
 
             _socket = new StreamSocket();
+            _socketConnected = false;
 
             var localHostNames = NetworkInformation.GetHostNames();
-            var successful = false;
             foreach (var localHostName in localHostNames)
             {
                 if (localHostName.IPInformation != null)
                 {
                     var adapter = localHostName.IPInformation.NetworkAdapter;
 
+                    // References for HTTPS
+                    //  https://social.msdn.microsoft.com/Forums/windowsapps/en-US/07b90540-ed8b-488e-9bba-04d844f0b1d9/uwp-streamsocket-in-background-trouble-with-ssl-https?forum=wpdevelop
                     try
                     {
-                        await _socket.ConnectAsync(hostName, "80", SocketProtectionLevel.PlainSocket, adapter);
+                        if (https)
+                        {
+                            _socket = new StreamSocket();
+
+                            _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+                            _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+
+                            SocketConnectTimeout(HttpsTimeout);
+                            await _socket.ConnectAsync(hostName, "443", SocketProtectionLevel.Tls12, adapter);
+
+                            _socketConnected = true;
+                        }
+                        else
+                        {
+                            SocketConnectTimeout(PlainTextTimeout);
+
+                            await _socket.ConnectAsync(hostName, "80", SocketProtectionLevel.PlainSocket, adapter);
+
+                            _socketConnected = true;
+                        }
                         // TODO another version works on a binding to a specific adapter, we should not need that for now
-                        successful = true;
-                        break;
+                        if (_socketConnected)
+                        {
+                            break;
+                        }
                     }
                     catch (Exception)
                     {
@@ -144,7 +172,18 @@ namespace Redback.Connections
             _writer = null;
             _reader = null;
 
-            return successful;
+            return _socketConnected;
+        }
+
+        private void SocketConnectTimeout(object httpsTimeout)
+        {
+            throw new NotImplementedException();
+        }
+
+        private async void SocketConnectTimeout(TimeSpan timeout)
+        {
+            _socketConnected = false;
+            await Task.Delay(timeout);
         }
 
         public async Task<bool> SendRequest(string request)

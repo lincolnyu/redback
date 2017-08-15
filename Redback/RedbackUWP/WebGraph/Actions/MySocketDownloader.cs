@@ -10,6 +10,17 @@ namespace Redback.WebGraph.Actions
 {
     public class MySocketDownloader : FileDownloader
     {
+        #region Types
+
+        private enum PageResults
+        {
+            Successful,
+            IsHttps,
+            Failed
+        }
+
+        #endregion
+
         #region Properties
 
         public bool UseReferrer { get; set; }
@@ -29,14 +40,20 @@ namespace Redback.WebGraph.Actions
             var connected = await agent.SocketConnect();
             if (connected)
             {
-                await AcquirePage(agent, hostName, path);
+                var res = await AcquirePage(agent, hostName, path);
+                if (res == PageResults.IsHttps)
+                {
+                    Url.UrlToHostName(out prefix, out hostName, out path);
+                    connected = await agent.SocketConnect(true);
+                    await AcquirePage(agent, hostName, path, true);
+                }
             }
             // TODO report error otherwise?
         }
 
         #endregion
 
-        private async Task<bool> AcquirePage(WebAgent agent, string hostName, string path)
+        private async Task<PageResults> AcquirePage(WebAgent agent, string hostName, string path, bool isHttps = false)
         {
             var sbRequest = new StringBuilder();
 
@@ -53,7 +70,8 @@ namespace Redback.WebGraph.Actions
             sbRequest.AddParameter(@"Accept: text/html, application/xhtml+xml, */*");
             if (UseReferrer)
             {
-                sbRequest.AddParameterFormat(@"Referer: http://{0}/", hostName);
+                sbRequest.AddParameterFormat(@"Referer: {0}://{1}/",
+                    isHttps ? "https" : "http", hostName);
             }
             sbRequest.AddParameter(@"Accept-Language: en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
             sbRequest.AddParameter(@"User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
@@ -69,7 +87,7 @@ namespace Redback.WebGraph.Actions
                 var r = await agent.SendRequest(request);
                 if (!r)
                 {
-                    return false;
+                    return PageResults.Failed;
                 }
 
                 var response = await agent.GetResponse();
@@ -77,19 +95,24 @@ namespace Redback.WebGraph.Actions
                 if (!string.IsNullOrWhiteSpace(response.Location))
                 {
                     // Update to the most accurate URL
+                    if (!Url.IsHttps() && response.Location.IsHttps())
+                    {
+                        Url = response.Location;
+                        return PageResults.IsHttps;
+                    }
                     Url = response.Location;
                 }
 
                 if (response.IsSession)
                 {
-                    return await ProcessSessionalPage(agent, hostName, path, response);
+                    return await ProcessSessionalPage(agent, hostName, path, response) ? PageResults.Successful : PageResults.Failed;
                 }
 
-                return await ProcessPageResponse(response);
+                return await ProcessPageResponse(response) ? PageResults.Successful : PageResults.Failed;
             }
             catch
             {
-                return false;
+                return PageResults.Failed;
             }
         }
 
@@ -234,7 +257,7 @@ namespace Redback.WebGraph.Actions
             }
             return cookie.Substring(start, end - start);
         }
-        
+
         #endregion
     }
 }

@@ -29,6 +29,9 @@ namespace Redback.Helpers
 
         #region Methods
 
+        public static bool IsHttps(this string link)
+            => link.StartsWith(Https);
+
         public static UrlType GetUrlType(this string link)
         {
             if (link.StartsWith(".")) // including ./ and ../
@@ -255,9 +258,9 @@ namespace Redback.Helpers
             {
                 endPrefix = Http.Length;
             }
-            else if (abs.StartsWith(Http, StringComparison.OrdinalIgnoreCase))
+            else if (abs.StartsWith(Https, StringComparison.OrdinalIgnoreCase))
             {
-                endPrefix = Http.Length;
+                endPrefix = Https.Length;
             }
             rootSlash = abs.IndexOf('/', endPrefix);
             if (rootSlash < 0)
