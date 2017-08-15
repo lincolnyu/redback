@@ -10,7 +10,6 @@ using Windows.Storage.Streams;
 using Windows.Networking.Sockets;
 using Windows.Networking;
 using Windows.Networking.Connectivity;
-using Windows.Security.Cryptography.Certificates;
 
 namespace Redback.Connections
 {
@@ -78,7 +77,6 @@ namespace Redback.Connections
         private DataWriter _writer;
 
         private DataReader _reader;
-        private bool _socketConnected;
 
         #endregion
 
@@ -98,8 +96,8 @@ namespace Redback.Connections
             get; private set;
         }
 
-        public TimeSpan PlainTextTimeout = TimeSpan.FromMilliseconds(500);
-        public TimeSpan HttpsTimeout = TimeSpan.FromMilliseconds(500);
+        public TimeSpan PlainTextTimeout = TimeSpan.FromSeconds(3);
+        public TimeSpan HttpsTimeout = TimeSpan.FromSeconds(3);
 
         #endregion
 
@@ -118,7 +116,7 @@ namespace Redback.Connections
             }
 
             _socket = new StreamSocket();
-            _socketConnected = false;
+            var connected = false;
 
             var localHostNames = NetworkInformation.GetHostNames();
             foreach (var localHostName in localHostNames)
@@ -135,27 +133,24 @@ namespace Redback.Connections
                         {
                             _socket = new StreamSocket();
 
-                            _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
-                            _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+                            //        _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+                            //        _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
 
                             SocketConnectTimeout(HttpsTimeout);
                             await _socket.ConnectAsync(hostName, "443", SocketProtectionLevel.Tls12, adapter);
-
-                            _socketConnected = true;
+                            connected = true;
                         }
                         else
                         {
                             SocketConnectTimeout(PlainTextTimeout);
-
                             await _socket.ConnectAsync(hostName, "80", SocketProtectionLevel.PlainSocket, adapter);
-
-                            _socketConnected = true;
+                            connected = true;
                         }
-                        // TODO another version works on a binding to a specific adapter, we should not need that for now
-                        if (_socketConnected)
-                        {
-                            break;
-                        }
+                        break;
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        _socket = new StreamSocket();
                     }
                     catch (Exception)
                     {
@@ -172,18 +167,13 @@ namespace Redback.Connections
             _writer = null;
             _reader = null;
 
-            return _socketConnected;
-        }
-
-        private void SocketConnectTimeout(object httpsTimeout)
-        {
-            throw new NotImplementedException();
+            return connected;
         }
 
         private async void SocketConnectTimeout(TimeSpan timeout)
         {
-            _socketConnected = false;
             await Task.Delay(timeout);
+            _socket.Dispose();
         }
 
         public async Task<bool> SendRequest(string request)

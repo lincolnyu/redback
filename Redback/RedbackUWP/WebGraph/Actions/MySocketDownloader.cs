@@ -38,15 +38,17 @@ namespace Redback.WebGraph.Actions
             var owner = (ISiteGraph<WebAgent>)Owner;
             var agent = owner.GetOrCreateWebAgent(hostName);
             var connected = await agent.SocketConnect();
+            var tryHttps = !connected;
             if (connected)
             {
                 var res = await AcquirePage(agent, hostName, path);
-                if (res == PageResults.IsHttps)
-                {
-                    Url.UrlToHostName(out prefix, out hostName, out path);
-                    connected = await agent.SocketConnect(true);
-                    await AcquirePage(agent, hostName, path, true);
-                }
+                tryHttps = res == PageResults.IsHttps;
+            }
+            if (tryHttps)
+            {
+                Url.UrlToHostName(out prefix, out hostName, out path);
+                connected = await agent.SocketConnect(true);
+                await AcquirePage(agent, hostName, path, true);
             }
             // TODO report error otherwise?
         }
