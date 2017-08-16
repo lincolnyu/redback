@@ -59,7 +59,7 @@ namespace WebDownloaderUWP
             _downloadFolder = await storage.GetOrCreateSubfolderAsync("Downloads");
 
             var url = TxtUrl.Text;
-            var webTask = new SiteGraph(url, _downloadFolder.Path);
+            var webTask = new SocketSiteGraph(url, _downloadFolder.Path);
 
             webTask.ObjectProcessed += WebTaskOnObjectProcessed;
 
@@ -68,7 +68,7 @@ namespace WebDownloaderUWP
             _searching = false;
         }
 
-        private void WebTaskOnObjectProcessed(object sender, SiteGraph.ObjectProcessedEventArgs args)
+        private void WebTaskOnObjectProcessed(object sender, SocketSiteGraph.ObjectProcessedEventArgs args)
         {
             var hasUrl = args.Object as IHasUrl;
             var url = "";

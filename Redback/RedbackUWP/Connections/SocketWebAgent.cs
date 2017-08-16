@@ -13,7 +13,7 @@ using Windows.Networking.Connectivity;
 
 namespace Redback.Connections
 {
-    public class WebAgent : IWebAgent
+    public class SocketWebAgent : IWebAgent
     {
         #region Delegates
 
@@ -82,7 +82,7 @@ namespace Redback.Connections
 
         #region Constructors
 
-        public WebAgent(string hostDisplayName)
+        public SocketWebAgent(string hostDisplayName)
         {
             HostDisplayName = hostDisplayName;
         }
@@ -125,16 +125,15 @@ namespace Redback.Connections
                 {
                     var adapter = localHostName.IPInformation.NetworkAdapter;
 
+                    // TODO This is still unable to do HTTPS
                     // References for HTTPS
                     //  https://social.msdn.microsoft.com/Forums/windowsapps/en-US/07b90540-ed8b-488e-9bba-04d844f0b1d9/uwp-streamsocket-in-background-trouble-with-ssl-https?forum=wpdevelop
                     try
                     {
                         if (https)
                         {
-                            _socket = new StreamSocket();
-
-                            //        _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
-                            //        _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+                            // _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+                            // _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
 
                             SocketConnectTimeout(HttpsTimeout);
                             await _socket.ConnectAsync(hostName, "443", SocketProtectionLevel.Tls12, adapter);

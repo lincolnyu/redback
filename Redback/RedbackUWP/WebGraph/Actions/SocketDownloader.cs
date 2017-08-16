@@ -8,7 +8,7 @@ using Redback.WebGraph.Nodes;
 
 namespace Redback.WebGraph.Actions
 {
-    public class MySocketDownloader : FileDownloader
+    public class SocketDownloader : FileDownloader
     {
         #region Types
 
@@ -35,7 +35,7 @@ namespace Redback.WebGraph.Actions
         {
             //TODO we may not be able to do https now
             Url.UrlToHostName(out string prefix, out string hostName, out string path);
-            var owner = (ISiteGraph<WebAgent>)Owner;
+            var owner = (ISiteGraph<SocketWebAgent>)Owner;
             var agent = owner.GetOrCreateWebAgent(hostName);
             var connected = await agent.SocketConnect();
             var tryHttps = !connected;
@@ -55,7 +55,7 @@ namespace Redback.WebGraph.Actions
 
         #endregion
 
-        private async Task<PageResults> AcquirePage(WebAgent agent, string hostName, string path, bool isHttps = false)
+        private async Task<PageResults> AcquirePage(SocketWebAgent agent, string hostName, string path, bool isHttps = false)
         {
             var sbRequest = new StringBuilder();
 
@@ -118,7 +118,7 @@ namespace Redback.WebGraph.Actions
             }
         }
 
-        private async Task<bool> ProcessPageResponse(WebAgent.HttpResponse response)
+        private async Task<bool> ProcessPageResponse(SocketWebAgent.HttpResponse response)
         {
             if (response.IsPage)
             {
@@ -162,7 +162,7 @@ namespace Redback.WebGraph.Actions
             return true;
         }
 
-        private async Task<bool> ProcessSessionalPage(WebAgent agent, string hostName, string path, WebAgent.HttpResponse response)
+        private async Task<bool> ProcessSessionalPage(SocketWebAgent agent, string hostName, string path, SocketWebAgent.HttpResponse response)
         {
             var recursive = 0;
             const int maxAttempt = 5;

@@ -5,11 +5,11 @@ using Redback.WebGraph.Actions;
 
 namespace Redback.WebGraph
 {
-    public class SiteGraph : BaseSiteGraph<WebAgent>
+    public class SocketSiteGraph : BaseSiteGraph<SocketWebAgent>
     {
         #region Constructors
 
-        public SiteGraph(string startPage, string baseDirectory)
+        public SocketSiteGraph(string startPage, string baseDirectory)
         {
             BaseDirectory = baseDirectory;
             startPage.UrlToHostName(out string prefix, out string hostName, out string path);
@@ -20,7 +20,7 @@ namespace Redback.WebGraph
                 dir = Path.Combine(BaseDirectory, dir);
             }
 
-            var page = new MySocketDownloader
+            var page = new SocketDownloader
             {
                 Url = startPage,
                 Owner = this,
@@ -42,11 +42,11 @@ namespace Redback.WebGraph
         
         #region Methods
         
-        public override WebAgent GetOrCreateWebAgent(string hostName)
+        public override SocketWebAgent GetOrCreateWebAgent(string hostName)
         {
-            if (!_hostsToAgents.TryGetValue(hostName, out WebAgent agent))
+            if (!_hostsToAgents.TryGetValue(hostName, out SocketWebAgent agent))
             {
-                agent = new WebAgent(hostName);
+                agent = new SocketWebAgent(hostName);
                 _hostsToAgents[hostName] = agent;
                 HostLruQueue.AddLast(hostName);
                 AgeWebAgents();

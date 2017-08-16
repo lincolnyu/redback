@@ -15,10 +15,10 @@ namespace Redback.WebGraph.Nodes
                 return null;
             }
 
-            var owner = (SiteGraph)Owner;
+            var owner = (SocketSiteGraph)Owner;
             dir = GetProperDirectory(owner.BaseDirectory, dir);
 
-            var downloader = new MySocketDownloader
+            var downloader = new SocketDownloader
             {
                 Owner = Owner,
                 SourceNode = this,
