@@ -68,7 +68,7 @@ namespace WebDownloaderUWP
             _searching = false;
         }
 
-        private void WebTaskOnObjectProcessed(object sender, SocketSiteGraph.ObjectProcessedEventArgs args)
+        private void WebTaskOnObjectProcessed(object sender, BaseSiteGraph.ObjectProcessedEventArgs args)
         {
             var hasUrl = args.Object as IHasUrl;
             var url = "";

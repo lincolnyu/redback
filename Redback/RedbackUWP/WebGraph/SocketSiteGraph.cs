@@ -5,7 +5,7 @@ using Redback.WebGraph.Actions;
 
 namespace Redback.WebGraph
 {
-    public class SocketSiteGraph : BaseSiteGraph<SocketWebAgent>
+    public class SocketSiteGraph : HostAgentPoweredGraph<SocketWebAgent>
     {
         #region Constructors
 
@@ -58,16 +58,6 @@ namespace Redback.WebGraph
                 HostLruQueue.AddLast(hostName);
             }
             return agent;
-        }
-
-        private void AgeWebAgents()
-        {
-            while (_hostsToAgents.Count > MaxAgents)
-            {
-                var first = HostLruQueue.First.Value;
-                HostLruQueue.RemoveFirst();
-                _hostsToAgents.Remove(first);
-            }
         }
         
         #endregion

@@ -13,7 +13,7 @@ using Windows.Networking.Connectivity;
 
 namespace Redback.Connections
 {
-    public class SocketWebAgent : IWebAgent
+    public class SocketWebAgent
     {
         #region Delegates
 

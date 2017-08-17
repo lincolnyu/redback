@@ -35,7 +35,7 @@ namespace Redback.WebGraph.Actions
         {
             //TODO we may not be able to do https now
             Url.UrlToHostName(out string prefix, out string hostName, out string path);
-            var owner = (ISiteGraph<SocketWebAgent>)Owner;
+            var owner = (SocketSiteGraph)Owner;
             var agent = owner.GetOrCreateWebAgent(hostName);
             var connected = await agent.SocketConnect();
             var tryHttps = !connected;

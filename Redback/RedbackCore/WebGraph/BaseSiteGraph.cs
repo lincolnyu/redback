@@ -1,14 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using QSharp.Scheme.Classical.Trees;
-using Redback.Connections;
 using Redback.Helpers;
 using System.Threading.Tasks;
 
 namespace Redback.WebGraph
 {
-    public abstract class BaseSiteGraph<TWebAgent> : ISiteGraph, ISiteGraph<TWebAgent>
-        where TWebAgent : IWebAgent
+    public class BaseSiteGraph : ISiteGraph
     {
         #region Delegates
 
@@ -26,14 +24,10 @@ namespace Redback.WebGraph
 
             public string ErrorMessage { get; set; }
         }
-        
+
         #endregion
 
         #region Fields
-
-        protected const int MaxAgents = 64;
-
-        protected readonly Dictionary<string, TWebAgent> _hostsToAgents;
 
         private readonly AvlTree<GraphObject> _queuedObjects;
 
@@ -42,13 +36,12 @@ namespace Redback.WebGraph
         #endregion
 
         #region Constructors
-
+        
         protected BaseSiteGraph()
         {
             DownloadedUrl = new HashSet<string>();
             HostLruQueue = new LinkedList<string>();
             _queuedObjects = new AvlTree<GraphObject>(TaskCompare);
-            _hostsToAgents = new Dictionary<string, TWebAgent>();
         }
 
         #endregion
@@ -63,7 +56,7 @@ namespace Redback.WebGraph
         {
             get
             {
-                return ((IHasUrl) RootObject).Url;
+                return ((IHasUrl)RootObject).Url;
             }
         }
 
@@ -78,7 +71,7 @@ namespace Redback.WebGraph
                     node != null;
                     node = node.GetNextInorder())
                 {
-                    var nodet = (AvlTreeWorker.INode<GraphObject>) node;
+                    var nodet = (AvlTreeWorker.INode<GraphObject>)node;
                     yield return nodet.Entry;
                 }
             }
@@ -93,14 +86,6 @@ namespace Redback.WebGraph
         }
 
         public HashSet<string> DownloadedUrl { get; private set; }
-
-        /// <summary>
-        ///  Lookup table from host to agent 
-        /// </summary>
-        /// <remarks>
-        ///  agents are only used for socket connection
-        /// </remarks>
-        public IReadOnlyDictionary<string, TWebAgent> HostsToAgents => _hostsToAgents;
 
         /// <summary>
         ///  LRU queue of hosts that contains exactly the same hosts as the keys in HostsToAgents
@@ -121,6 +106,42 @@ namespace Redback.WebGraph
         #endregion
 
         #region Methods
+
+        #region ISiteGraph
+
+        public void AddObject(GraphObject obj)
+        {
+            _queuedObjects.Insert(obj);
+            _objectCount++;
+        }
+
+        public bool HasDownloaded(string link)
+        {
+            link = link.ToLower().Trim();
+            return DownloadedUrl.Contains(link);
+        }
+
+        public void SetHasDownloaded(string link)
+        {
+            link = link.ToLower().Trim();
+            DownloadedUrl.Add(link);
+        }
+
+        #endregion
+
+        public GraphObject PopObject()
+        {
+            if (_queuedObjects.IsEmpty)
+            {
+                return null;
+            }
+
+            var firstf = _queuedObjects.Root.GetFirstInorder();
+            var firstt = (AvlTreeWorker.INode<GraphObject>)firstf;
+            _queuedObjects.Remove(firstt);
+            _objectCount--;
+            return firstt.Entry;
+        }
 
         public async Task Run()
         {
@@ -155,61 +176,17 @@ namespace Redback.WebGraph
             }
         }
 
-        public abstract TWebAgent GetOrCreateWebAgent(string hostName);
-        
-        private void AgeWebAgents()
+        protected virtual int TaskCompare(GraphObject x, GraphObject y)
         {
-            while (_hostsToAgents.Count > MaxAgents)
-            {
-                var first = HostLruQueue.First.Value;
-                HostLruQueue.RemoveFirst();
-                _hostsToAgents.Remove(first);
-            }
+            var r = BaseTaskCompare(x, y);
+
+            // NOTE x is given higher priority the tree node should appear on the left in searching
+            if (r == 0) return -1; // doesn't matter
+
+            return 0;
         }
 
-        public void AddObject(GraphObject obj)
-        {
-            _queuedObjects.Insert(obj);
-            _objectCount++;
-        }
-
-        public GraphObject PopObject()
-        {
-            if (_queuedObjects.IsEmpty)
-            {
-                return null;
-            }
-
-            var firstf = _queuedObjects.Root.GetFirstInorder();
-            var firstt = (AvlTreeWorker.INode<GraphObject>)firstf;
-            _queuedObjects.Remove(firstt);
-            _objectCount--;
-            return firstt.Entry;
-        }
-
-        private bool IsOnHostOrReferencedByHostPage(GraphObject x)
-        {
-            string dummy, hostName;
-            if (x is IHasUrl hasUrl)
-            {
-                hasUrl.Url.UrlToHostName(out dummy, out hostName, out dummy);
-                if (hostName == StartHost)
-                {
-                    return true;
-                }
-            }
-
-            var action = x as BaseAction;
-            if (action == null)
-            {
-                return false;
-            }
-
-            action.SourceNode.Url.UrlToHostName(out dummy, out hostName, out dummy);
-            return hostName == StartHost;
-        }
-
-        private int TaskCompare(GraphObject x, GraphObject y)
+        protected int BaseTaskCompare(GraphObject x, GraphObject y)
         {
             if (Equals(x, y))
             {
@@ -244,40 +221,7 @@ namespace Redback.WebGraph
                 var xUrl = xHasUrl.Url;
                 var yUrl = yHasUrl.Url;
 
-                var comp = StartPage.CompareUrlDistances(xUrl, yUrl);
-
-                if (comp != 0)
-                {
-                    return comp;
-                }
-
-                xUrl.UrlToHostName(out string xPrefix, out string xHostName, out string dummy);
-                yUrl.UrlToHostName(out string yPrefix, out string yHostName, out dummy);
-
-                var xIsStart = string.Equals(xHostName, StartHost, StringComparison.OrdinalIgnoreCase);
-                var yIsStart = string.Equals(yHostName, StartHost, StringComparison.OrdinalIgnoreCase);
-                if (xIsStart && !yIsStart)
-                {
-                    return -1;
-                }
-                if (!xIsStart && yIsStart)
-                {
-                    return 1;
-                }
-                
-                var xCached = _hostsToAgents.ContainsKey(xHostName);
-                var yCached = _hostsToAgents.ContainsKey(yHostName);
-
-                if (xCached && !yCached)
-                {
-                    return -1;
-                }
-                if (!xCached && yCached)
-                {
-                    return 1;
-                }
-
-                return -1;// doesn't matter
+                return StartPage.CompareUrlDistances(xUrl, yUrl);
             }
 
             // task object without a URL has higher priority
@@ -291,20 +235,29 @@ namespace Redback.WebGraph
                 return 1;
             }
 
-            // NOTE x is given higher priority the tree node should appear on the left in searching
-            return -1; // doesn't matter
+            return 0;
         }
 
-        public bool HasDownloaded(string link)
+        private bool IsOnHostOrReferencedByHostPage(GraphObject x)
         {
-            link = link.ToLower().Trim();
-            return DownloadedUrl.Contains(link);
-        }
+            string dummy, hostName;
+            if (x is IHasUrl hasUrl)
+            {
+                hasUrl.Url.UrlToHostName(out dummy, out hostName, out dummy);
+                if (hostName == StartHost)
+                {
+                    return true;
+                }
+            }
 
-        public void SetHasDownloaded(string link)
-        {
-            link = link.ToLower().Trim();
-            DownloadedUrl.Add(link);
+            var action = x as BaseAction;
+            if (action == null)
+            {
+                return false;
+            }
+
+            action.SourceNode.Url.UrlToHostName(out dummy, out hostName, out dummy);
+            return hostName == StartHost;
         }
 
         #endregion
