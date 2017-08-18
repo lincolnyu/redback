@@ -183,7 +183,7 @@ namespace Redback.WebGraph
             // NOTE x is given higher priority the tree node should appear on the left in searching
             if (r == 0) return -1; // doesn't matter
 
-            return 0;
+            return r;
         }
 
         protected int BaseTaskCompare(GraphObject x, GraphObject y)

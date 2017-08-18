@@ -343,33 +343,32 @@ namespace Redback.Connections
                 if (contentType.Contains("text/html"))
                 {
                     var sbPayload = new StringBuilder();
+                    Encoding enc;
                     if (contentType.Contains("utf8"))
                     {
-                        var enc = new UTF8Encoding();
-                        var dec = enc.GetDecoder();
-                        var charCount = dec.GetCharCount(data, 0, data.Length);
-                        var chars = new char[charCount];
-                        dec.GetChars(data, 0, data.Length, chars, 0);
-                        foreach (var c in chars)
-                        {
-                            sbPayload.Append(c);
-                        }
+                        enc = new UTF8Encoding();
                     }
                     else
                     {
-                        // use trivial decoding
-                        // TODO to support other decoding methods?
-                        foreach (var b in data)
-                        {
-                            var c = (char) b;
-                            sbPayload.Append(c);
-                        }
+                        // TODO other encoding types
+                        enc = new ASCIIEncoding();
                     }
+                    var dec = enc.GetDecoder();
+                    var charCount = dec.GetCharCount(data, 0, data.Length);
+                    var chars = new char[charCount];
+                    dec.GetChars(data, 0, data.Length, chars, 0);
+                    foreach (var c in chars)
+                    {
+                        sbPayload.Append(c);
+                    }
+
                     response.PageContent = sbPayload.ToString();
                     response.DataContent = null;
+                    // TODO support other encoding type
                 }
                 else
                 {
+                    // Include not text encoded by unsupported encoding type
                     response.DataContent = data;
                     response.PageContent = null;
                 }

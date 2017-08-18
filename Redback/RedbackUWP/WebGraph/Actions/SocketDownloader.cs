@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Redback.Connections;
@@ -122,7 +121,17 @@ namespace Redback.WebGraph.Actions
         {
             if (response.IsPage)
             {
-                TargetNode = new SimplePageParser
+                TargetNode = new SimplePageParser((owner, source, level, url, localDir, localFile) =>
+                        new SocketDownloader
+                        {
+                            Owner = owner,
+                            SourceNode = source,
+                            Level = level,
+                            Url = url,
+                            LocalDirectory = localDir,
+                            LocalFileName = localFile,
+                            UseReferrer = UseReferrer
+                        })
                 {
                     Owner = Owner,
                     Url = Url,
@@ -132,15 +141,7 @@ namespace Redback.WebGraph.Actions
                 };
                 Owner.AddObject(TargetNode);
 #if !NO_WRITE_ORIG_PAGE
-                var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                var file = await folder.CreateNewFileAsync(LocalFileName);
-                using (var outputStream = await file.OpenStreamForWriteAsync())
-                {
-                    using (var sw = new StreamWriter(outputStream))
-                    {
-                        sw.Write(response.PageContent);
-                    }
-                }
+                await SaveAsync(response.PageContent);
 #endif
             }
             else if (response.IsSession)
@@ -151,13 +152,7 @@ namespace Redback.WebGraph.Actions
             {
                 // NOTE this is to save non page data which has no chance to save otherwise
                 // NOTE page data is supposed to be saved if wanted by the node (parser)
-                var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                var file = await folder.CreateNewFileAsync(LocalFileName);
-                using (var outputStream = await file.OpenStreamForWriteAsync())
-                {
-                    await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);
-                    await outputStream.FlushAsync();
-                }
+                await SaveDataAsync(response.DataContent);
             }
             return true;
         }

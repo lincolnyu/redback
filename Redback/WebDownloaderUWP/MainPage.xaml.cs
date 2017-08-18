@@ -1,4 +1,6 @@
-﻿using Redback.Helpers;
+﻿//#define USE_SOCKET_IMPLEMENTATION
+
+using Redback.Helpers;
 using Redback.WebGraph;
 using Windows.System;
 using Windows.Storage;
@@ -59,7 +61,11 @@ namespace WebDownloaderUWP
             _downloadFolder = await storage.GetOrCreateSubfolderAsync("Downloads");
 
             var url = TxtUrl.Text;
+#if USE_SOCKET_IMPLEMENTATION
             var webTask = new SocketSiteGraph(url, _downloadFolder.Path);
+#else
+            var webTask = new HttpSiteGraph(url, _downloadFolder.Path);
+#endif
 
             webTask.ObjectProcessed += WebTaskOnObjectProcessed;
 

@@ -50,6 +50,26 @@ namespace Redback.Helpers
             return UrlType.Relative;
         }
 
+        public static string MakeHttpIfCan(this string link)
+        {
+            if (link.StartsWith(Https, StringComparison.OrdinalIgnoreCase)
+                || link.StartsWith(Http, StringComparison.OrdinalIgnoreCase))
+            {
+                return link;
+            }
+            return $"{Http}{link}";
+        }
+
+        public static string MakeHttpsIfCan(this string link)
+        {
+            if (link.StartsWith(Https, StringComparison.OrdinalIgnoreCase)
+                || link.StartsWith(Http, StringComparison.OrdinalIgnoreCase))
+            {
+                return link;
+            }
+            return $"{Https}{link}";
+        }
+
         /// <summary>
         ///  Returns the URL with the redundant slashes removed
         /// </summary>
