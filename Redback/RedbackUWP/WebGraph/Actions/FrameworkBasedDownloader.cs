@@ -54,15 +54,13 @@ namespace Redback.WebGraph.Actions
                 using (var sr = new StreamReader(s))
                 {
                     var page = sr.ReadToEnd();
-                    TargetNode = new SimplePageParser((owner, source, level, url, localDir, localFile) =>
+                    TargetNode = new SimplePageParser((owner, source, level, url) =>
                         new FrameworkImplementedDownloader
                         {
                             Owner = owner,
                             SourceNode = source,
                             Level = level,
                             Url = url,
-                            LocalDirectory = localDir,
-                            LocalFileName = localFile
                         })
                     {
                         Owner = Owner,

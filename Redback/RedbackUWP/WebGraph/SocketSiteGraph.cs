@@ -1,4 +1,5 @@
-﻿using Redback.Connections;
+﻿using System.Threading.Tasks;
+using Redback.Connections;
 using Redback.Helpers;
 using Redback.WebGraph.Actions;
 
@@ -10,7 +11,7 @@ namespace Redback.WebGraph
 
         public SocketSiteGraph(string startPage, string baseDirectory)
         {
-            this.Initialize<SocketDownloader>(startPage, baseDirectory);
+            this.ConstructGraph<SocketDownloader>(startPage, baseDirectory);
         }
 
         #endregion
@@ -20,9 +21,14 @@ namespace Redback.WebGraph
         public string BaseDirectory { get; private set; }
 
         #endregion
-        
+
         #region Methods
-        
+
+        public async Task Initialize()
+        {
+            await this.InitializeGraph();
+        }
+
         public override SocketWebAgent GetOrCreateWebAgent(string hostName)
         {
             if (!_hostsToAgents.TryGetValue(hostName, out SocketWebAgent agent))
@@ -41,10 +47,14 @@ namespace Redback.WebGraph
             return agent;
         }
 
-        public void Setup(string baseDirectory, string startHost, GraphObject root)
+        public void SetStartHost(string startHost)
+        {
+            StartHost = startHost;
+        }
+
+        public void Setup(string baseDirectory, GraphObject root)
         {
             BaseDirectory = baseDirectory;
-            StartHost = startHost;
             RootObject = root;
         }
 

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -15,6 +16,8 @@ namespace Redback.Helpers
             Rootbased,
             Relative
         }
+
+        public delegate string ValidateFileNameDelegate(string originalName);
 
         #endregion
 
@@ -120,6 +123,7 @@ namespace Redback.Helpers
             if (enforcePrefix && endPrefix == 0)
             {
                 orig = Http + orig;
+                rootSlash += Http.Length;
             }
             if (urlType == UrlType.Rootbased)
             {
@@ -134,8 +138,8 @@ namespace Redback.Helpers
             abs.GetHostSeparators(out int dummy, out int slash);
             var patha = slash >= abs.Length? "" : abs.Substring(slash + 1);
             var heada = abs.Substring(0, slash);
-            var segsa = patha.Split('/');
-            var segsb = b.Split('/');
+            var segsa = patha.UrlSplit();
+            var segsb = b.UrlSplit();
             var ai = segsa.Length-1;
             var eliminating = true;
             var sb = new StringBuilder();
@@ -212,7 +216,7 @@ namespace Redback.Helpers
                 var hostName = baseAddr.Substring(0, firstSlash);
                 addrSegs = new List<string> { hostName };
                 link = link.TrimStart('/');
-                var linkSegs = link.Split('/');
+                var linkSegs = link.UrlSplit();
                 foreach (var linkSeg in linkSegs)
                 {
                     switch (linkSeg)
@@ -230,13 +234,13 @@ namespace Redback.Helpers
             }
             else
             {
-                addrSegs = baseAddr.Split('/').ToList();
+                addrSegs = baseAddr.UrlSplit().ToList();
                 if (addrSegs.Count > 1)
                 {
                     addrSegs.RemoveAt(addrSegs.Count - 1);
                 }
                 var linkToSeg = link.TrimEnd('/');
-                var linkSegs = linkToSeg.Split('/');
+                var linkSegs = linkToSeg.UrlSplit();
                 foreach (var linkSeg in linkSegs)
                 {
                     switch (linkSeg)
@@ -288,6 +292,9 @@ namespace Redback.Helpers
                 rootSlash = abs.Length;
             }
         }
+
+        public static string GetHost(this string abs)
+            => abs.GetBaseUrl().BaseUrlToHost();
 
         /// <summary>
         ///  Get the base url (excluding the tailing /)
@@ -343,7 +350,8 @@ namespace Redback.Helpers
         /// <param name="directory">The directory to put the downloaded content in as per the URL</param>
         /// <param name="fileName">The file name of the downloaded content</param>
         /// <returns>True if successful</returns>
-        public static bool UrlToFilePath(this string url, out string directory, out string fileName)
+        public static bool UrlToFilePath(this string url, out string directory, out string fileName,
+            ValidateFileNameDelegate validateFileName = null)
         {
             url = url.Trim().ToLower();
             if (url.StartsWith(Http))
@@ -354,7 +362,7 @@ namespace Redback.Helpers
             {
                 url = url.Substring(Https.Length);
             }
-            var segs = url.Split('/');
+            var segs = url.UrlSplit();
             var sbDirectory = new StringBuilder();
             if (segs.Length > 0)
             {
@@ -367,18 +375,14 @@ namespace Redback.Helpers
                     }
                     sbDirectory.Append(segs[segs.Length - 2]);
                     directory = sbDirectory.ToString();
-                    fileName = segs[segs.Length - 1];
-                    if (string.IsNullOrWhiteSpace(fileName))
-                    {
-                        // TODO this should be ok but who knows
-                        fileName = "index.html";
-                    }
+                    fileName = segs[segs.Length - 1]; // leave validateFileName() to provide the default one
                 }
                 else
                 {
                     directory = segs[0];
-                    fileName = "index.html"; // TODO this should be ok but who knows
+                    fileName = ""; // leave validateFileName() to provide the default one
                 }
+                fileName = validateFileName?.Invoke(fileName) ?? fileName;
                 return true;
             }
             directory = null;
@@ -386,10 +390,40 @@ namespace Redback.Helpers
             return false;
         }
 
-        public static string GetFileRelative(string baseUrl, string link, StringComparison sc = StringComparison.OrdinalIgnoreCase)
+        public static string[] UrlSplit(this string url) => url.UrlSplitToEnum().ToArray();
+
+        public static IEnumerable<string> UrlSplitToEnum(this string url)
         {
-            UrlToFilePath(baseUrl, out string dir1, out string fn1);
-            UrlToFilePath(link, out string dir2, out string fn2);
+            var sb = new StringBuilder();
+            var tail = false;
+            foreach (var c in url)
+            {
+                if (c != '/' || tail)
+                {
+                    if (c == '?' || c == '&')
+                    {
+                        tail = true;
+                    }
+                    sb.Append(c);
+                }
+                else
+                {
+                    if (sb.Length > 0)
+                    {
+                        yield return sb.ToString();
+                    }
+                    sb.Clear();
+                }
+            }
+            yield return sb.ToString(); // last bit should be exported regardless
+        }
+
+        public static string GetFileRelative(string baseUrl, string link,
+            ValidateFileNameDelegate validateFileName = null,
+            StringComparison sc = StringComparison.OrdinalIgnoreCase)
+        {
+            UrlToFilePath(baseUrl, out string dir1, out string fn1, validateFileName);
+            UrlToFilePath(link, out string dir2, out string fn2, validateFileName);
             var split1 = dir1.Split(DirectorySeparator);
             var split2 = dir2.Split(DirectorySeparator);
             var diffStart = 0;
@@ -447,8 +481,8 @@ namespace Redback.Helpers
                 return 1;
             }
 
-            var pathSegs1 = path1.Split('/');
-            var pathSegs2 = path2.Split('/');
+            var pathSegs1 = path1.UrlSplit();
+            var pathSegs2 = path2.UrlSplit();
 
             int i;
             for (i = 0; i < pathSegs1.Length && i < pathSegs2.Length; i++)
@@ -472,6 +506,32 @@ namespace Redback.Helpers
 
             return dist1.CompareTo(dist2);
         }
+
+        public static string ValidateFileName(this string original, char replaceChar)
+        {
+            if (string.IsNullOrWhiteSpace(original))
+            {
+                return "index.html"; // TODO this should be ok but who knows
+            }
+
+            var sb = new StringBuilder();
+            var invalidChars = Path.GetInvalidFileNameChars();
+            foreach (var c in original)
+            {
+                if (!invalidChars.Contains(c))
+                {
+                    sb.Append(c);
+                }
+                else
+                {
+                    sb.Append(replaceChar);
+                }
+            }
+            return sb.ToString();
+        }
+
+        public static string ValidateFileName(this string original)
+            => original.ValidateFileName('_');
 
         #endregion
     }

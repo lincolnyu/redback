@@ -9,7 +9,7 @@ namespace Redback.WebGraph.Nodes
         #region Types
 
         public delegate FileDownloader CreateDownloaderDelegate(ISiteGraph owner, SimplePageParser source,
-    int level, string url, string localDir, string localFile);
+    int level, string url);
 
         #endregion
 
@@ -24,18 +24,8 @@ namespace Redback.WebGraph.Nodes
 
         #region Methods
 
-        protected override BaseAction CreateDownloader(string link)
-        {
-            if (!link.UrlToFilePath(out string dir, out string fileName))
-            {
-                return null;
-            }
-
-            var owner = (ICommonGraph)Owner;
-            dir = GetProperDirectory(owner.BaseDirectory, dir);
-
-            return CreateDownloaderCallback(Owner, this, Level + 1, link, dir, fileName);
-        }
+        protected override BaseDownloader CreateDownloader(string link)
+            => CreateDownloaderCallback(Owner, this, Level + 1, link);
 
         public CreateDownloaderDelegate CreateDownloaderCallback { get; private set; }
 

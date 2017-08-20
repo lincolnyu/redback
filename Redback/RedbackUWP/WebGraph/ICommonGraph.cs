@@ -1,9 +1,17 @@
-﻿namespace Redback.WebGraph
+﻿using System.Threading.Tasks;
+
+namespace Redback.WebGraph
 {
     public interface ICommonGraph : ISiteGraph
     {
         string BaseDirectory { get; }
 
-        void Setup(string baseDirectory, string startHost, GraphObject root);
+        GraphObject RootObject { get; }
+
+        void Setup(string baseDirectory, GraphObject root);
+
+        void SetStartHost(string startHost);
+
+        Task Initialize();
     }
 }

@@ -121,15 +121,13 @@ namespace Redback.WebGraph.Actions
         {
             if (response.IsPage)
             {
-                TargetNode = new SimplePageParser((owner, source, level, url, localDir, localFile) =>
+                TargetNode = new SimplePageParser((owner, source, level, url) =>
                         new SocketDownloader
                         {
                             Owner = owner,
                             SourceNode = source,
                             Level = level,
                             Url = url,
-                            LocalDirectory = localDir,
-                            LocalFileName = localFile,
                             UseReferrer = UseReferrer
                         })
                 {

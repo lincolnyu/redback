@@ -14,6 +14,12 @@ namespace Redback.WebGraph.Actions
 
         public abstract Task SaveAsync(string content);
 
+        /// <summary>
+        ///  Predownload to get the actual URL
+        /// </summary>
+        /// <returns></returns>
+        public virtual async Task<string> GetActualUrl() => Url;
+
         #endregion
     }
 }

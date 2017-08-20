@@ -66,9 +66,9 @@ namespace WebDownloaderUWP
 #else
             var webTask = new HttpSiteGraph(url, _downloadFolder.Path);
 #endif
-
             webTask.ObjectProcessed += WebTaskOnObjectProcessed;
 
+            await webTask.Initialize();
             await webTask.Run();
 
             _searching = false;

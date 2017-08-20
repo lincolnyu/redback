@@ -17,84 +17,51 @@ namespace Redback.WebGraph.Actions
             public Stream ResponseStream;
             public HttpWebRequest Request;
             public CancellationTokenSource CompleteByCancel;
-            public WebException Exception;
+            public Exception Exception;
+            public Exception Exception2;
         }
 
-        public override async Task Perform()
+        private Uri _actualUrl;
+        private RequestState _requestState;
+
+        public override async Task<string> GetActualUrl()
         {
-            var requestState = new RequestState();
+            await DownloadIfNot();
+            return _actualUrl?.ToString() ?? await base.GetActualUrl();
+        }
+
+
+        private async Task DownloadIfNot()
+        {
+            if (_requestState != null)
+            {
+                return;
+            }
+            _requestState = new RequestState();
             try
             {
-                var url = Url.MakeHttpIfCan();
+                var url = Url.MakeHttpIfCan(); // This is essential
+                // TODO https?
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 var source = new CancellationTokenSource();
 
-                requestState.Request = request;
-                requestState.CompleteByCancel = source;
+                _requestState.Request = request;
+                _requestState.CompleteByCancel = source;
 
-                var result = request.BeginGetResponse(ResponseCallback, requestState);
+                var result = request.BeginGetResponse(ResponseCallback, _requestState);
 
                 var cancelToken = source.Token;
                 await Task.Delay(TimeSpan.FromMilliseconds(-1), cancelToken);
             }
             catch (TaskCanceledException)
             {
-                if (requestState.Exception == null)
+                if (_requestState.Exception == null)
                 {
-                    var contentType = requestState.Response.ContentType;
-                    if (contentType == "text/html")
+                    _actualUrl = _requestState.Response.ResponseUri;
+                    if (_actualUrl.ToString().UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
                     {
-                        Encoding enc;
-                        if (contentType.Contains("utf8"))
-                        {
-                            enc = new UTF8Encoding();
-                        }
-                        else
-                        {
-                            // just use plain ASCII
-                            enc = new ASCIIEncoding();
-                        }
-                        // TODO encoding
-                        using (var sr = new StreamReader(requestState.ResponseStream, enc))
-                        {
-                            var content = sr.ReadToEnd();
-                            TargetNode = new SimplePageParser((owner, source, level, url, localDir, localFile) =>
-                                new HttpDownloader
-                                {
-                                    Owner = owner,
-                                    SourceNode = source,
-                                    Level = level,
-                                    Url = url,
-                                    LocalDirectory = localDir,
-                                    LocalFileName = localFile
-                                })
-                            {
-                                Owner = Owner,
-                                Url = Url,
-                                InducingAction = this,
-                                Level = Level + 1,
-                                Page = content
-                            };
-                            Owner.AddObject(TargetNode);
-#if !NO_WRITE_ORIG_PAGE
-                            await SaveAsync(content);
-#endif
-                        }
-                    }
-                    else
-                    {
-                        using (var br = new BinaryReader(requestState.ResponseStream))
-                        {
-                            var len = requestState.Response.ContentLength;
-                            const int maxBufLen = 16*1024;
-                            var buflen = (int)Math.Min(len, maxBufLen);
-
-                            await SaveDataAsync(() =>
-                            {
-                                var buf = br.ReadBytes(buflen);
-                                return buf;
-                            });
-                        }
+                        LocalDirectory = Path.Combine(((ICommonGraph)Owner).BaseDirectory, dir);
+                        LocalFileName = filename;
                     }
                 }
                 else
@@ -102,13 +69,78 @@ namespace Redback.WebGraph.Actions
                     // TODO log requestState.Exception or something
                 }
             }
-            catch (WebException)
+            catch (WebException e)
             {
-                // TODO log error or something
+                _requestState.Exception2 = e;
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                // TODO log error or something
+                _requestState.Exception2 = e;
+            }
+        }
+
+        public override async Task Perform()
+        {
+            await DownloadIfNot();
+            if (_requestState.Exception != null || _requestState.Exception2 != null)
+            {
+                return;
+            }
+            var contentType = _requestState.Response.ContentType;
+            if (contentType.Contains("text/html"))
+            {
+                Encoding enc;
+                if (contentType.Contains("utf8"))
+                {
+                    enc = new UTF8Encoding();
+                }
+                else
+                {
+                    // just use plain ASCII
+                    enc = new ASCIIEncoding();
+                }
+                // TODO encoding
+                using (var sr = new StreamReader(_requestState.ResponseStream, enc))
+                {
+                    System.Diagnostics.Debug.Assert(_actualUrl != null);
+                    var content = sr.ReadToEnd();
+                    TargetNode = new SimplePageParser((owner, source, level, url) =>
+                        new HttpDownloader
+                        {
+                            Owner = owner,
+                            SourceNode = source,
+                            Level = level,
+                            Url = url,
+                        })
+                    {
+                        Owner = Owner,
+                        Url = _actualUrl.ToString(),
+                        InducingAction = this,
+                        Level = Level + 1,
+                        Page = content
+                    };
+                    Owner.AddObject(TargetNode);
+#if !NO_WRITE_ORIG_PAGE
+                    await SaveAsync(content);
+#endif
+                }
+            }
+            else
+            {
+                var len = _requestState.Response.ContentLength;
+                if (len >= 0)
+                {
+                    using (var br = new BinaryReader(_requestState.ResponseStream))
+                    {
+                        const int maxBufLen = 16 * 1024;
+                        var buflen = (int)Math.Min(len, maxBufLen);
+                        await SaveDataAsync(() =>
+                        {
+                            var buf = br.ReadBytes(buflen);
+                            return buf;
+                        });
+                    }
+                }
             }
         }
 
@@ -120,9 +152,12 @@ namespace Redback.WebGraph.Actions
                 var request = requestState.Request;
                 requestState.Response = (HttpWebResponse)request.EndGetResponse(asyncResult);
                 requestState.ResponseStream = requestState.Response.GetResponseStream();
-                
             }
             catch (WebException e)
+            {
+                requestState.Exception = e;
+            }
+            catch (Exception e)
             {
                 requestState.Exception = e;
             }

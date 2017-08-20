@@ -155,12 +155,9 @@ namespace Redback.WebGraph
                     {
                         await action.Perform();
                     }
-                    else
+                    else if (obj is BaseNode node)
                     {
-                        if (obj is BaseNode node)
-                        {
-                            await node.Analyze();
-                        }
+                        await node.Analyze();
                     }
                 }
                 catch (Exception e)
@@ -174,6 +171,7 @@ namespace Redback.WebGraph
                     ErrorMessage = errorMessage
                 });
             }
+            System.Diagnostics.Debug.WriteLine("All graph objects processed, crawling completed");
         }
 
         protected virtual int TaskCompare(GraphObject x, GraphObject y)
