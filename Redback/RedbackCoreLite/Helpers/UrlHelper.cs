@@ -293,6 +293,16 @@ namespace Redback.Helpers
             }
         }
 
+        public static string ReplaceHost(this string original, string newHost)
+        {
+            original.GetHostSeparators(out int ep, out int rs);
+            var sb = new StringBuilder(original.Substring(0, ep));
+            sb.Append(newHost);
+            sb.Append(original.Substring(rs));
+            return sb.ToString();
+        }
+
+
         public static string GetHost(this string abs)
             => abs.GetBaseUrl().BaseUrlToHost();
 

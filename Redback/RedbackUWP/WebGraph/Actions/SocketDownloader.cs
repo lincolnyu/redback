@@ -137,7 +137,7 @@ namespace Redback.WebGraph.Actions
                     Level = Level + 1,
                     Page = response.PageContent
                 };
-                Owner.AddObject(TargetNode);
+                Owner.Graph.AddObject(TargetNode);
 #if !NO_WRITE_ORIG_PAGE
                 await SaveAsync(response.PageContent);
 #endif
@@ -208,7 +208,7 @@ namespace Redback.WebGraph.Actions
                 sbRequest.AddParameterFormat(@"Host: {0}", hostName);
                 sbRequest.AddParameter(@"Connection: Keep-Alive");
                 sbRequest.AddParameter(@"DNT: 1");
-                Owner.AddObject(TargetNode);
+                Owner.Graph.AddObject(TargetNode);
 
                 request = sbRequest.ToString();
                 r = await agent.SendRequest(request);

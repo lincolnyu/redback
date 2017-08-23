@@ -1,21 +1,9 @@
-﻿using System.Threading.Tasks;
-using Redback.Connections;
-using Redback.Helpers;
-using Redback.WebGraph.Actions;
+﻿using Redback.Connections;
 
 namespace Redback.WebGraph
 {
     public class SocketSiteGraph : HostAgentPoweredGraph<SocketWebAgent>, ICommonGraph
     {
-        #region Constructors
-
-        public SocketSiteGraph(string startPage, string baseDirectory)
-        {
-            this.ConstructGraph<SocketDownloader>(startPage, baseDirectory);
-        }
-
-        #endregion
-
         #region Properties
         
         public string BaseDirectory { get; private set; }
@@ -23,11 +11,6 @@ namespace Redback.WebGraph
         #endregion
 
         #region Methods
-
-        public async Task Initialize()
-        {
-            await this.InitializeGraph();
-        }
 
         public override SocketWebAgent GetOrCreateWebAgent(string hostName)
         {

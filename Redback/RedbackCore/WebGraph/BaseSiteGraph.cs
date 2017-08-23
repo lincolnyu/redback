@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using QSharp.Scheme.Classical.Trees;
 using Redback.Helpers;
 using System.Threading.Tasks;
+using Redback.UrlManagement;
 
 namespace Redback.WebGraph
 {
-    public class BaseSiteGraph : ISiteGraph
+    public class BaseSiteGraph : ISiteGraph, IUrlRegulator
     {
         #region Delegates
 
@@ -33,13 +34,14 @@ namespace Redback.WebGraph
 
         private int _objectCount;
 
+        private readonly HostRegulator _hostRegulator = new HostRegulator();
+
         #endregion
 
         #region Constructors
         
         protected BaseSiteGraph()
         {
-            DownloadedUrl = new HashSet<string>();
             HostLruQueue = new LinkedList<string>();
             _queuedObjects = new AvlTree<GraphObject>(TaskCompare);
         }
@@ -50,7 +52,7 @@ namespace Redback.WebGraph
 
         public string StartHost { get; protected set; }
 
-        public GraphObject RootObject { get; set; }
+        public GraphObject RootObject { get; protected set; }
 
         public string StartPage
         {
@@ -85,8 +87,6 @@ namespace Redback.WebGraph
             }
         }
 
-        public HashSet<string> DownloadedUrl { get; private set; }
-
         /// <summary>
         ///  LRU queue of hosts that contains exactly the same hosts as the keys in HostsToAgents
         ///  and gets rid of least used hosts over time
@@ -115,17 +115,12 @@ namespace Redback.WebGraph
             _objectCount++;
         }
 
-        public bool HasDownloaded(string link)
-        {
-            link = link.ToLower().Trim();
-            return DownloadedUrl.Contains(link);
-        }
+        #endregion
 
-        public void SetHasDownloaded(string link)
-        {
-            link = link.ToLower().Trim();
-            DownloadedUrl.Add(link);
-        }
+        #region UrlRegulator members
+
+        public string RegulateUrl(string originalUrl)
+            => _hostRegulator.RegulateUrl(originalUrl);
 
         #endregion
 

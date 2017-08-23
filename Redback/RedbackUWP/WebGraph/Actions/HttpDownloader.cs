@@ -30,7 +30,6 @@ namespace Redback.WebGraph.Actions
             return _actualUrl?.ToString() ?? await base.GetActualUrl();
         }
 
-
         private async Task DownloadIfNot()
         {
             if (_requestState != null)
@@ -42,6 +41,7 @@ namespace Redback.WebGraph.Actions
             {
                 var url = Url.MakeHttpIfCan(); // This is essential
                 // TODO https?
+                url = Owner.UrlRegulator.RegulateUrl(url) ?? url;
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 var source = new CancellationTokenSource();
 
@@ -60,7 +60,7 @@ namespace Redback.WebGraph.Actions
                     _actualUrl = _requestState.Response.ResponseUri;
                     if (_actualUrl.ToString().UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
                     {
-                        LocalDirectory = Path.Combine(((ICommonGraph)Owner).BaseDirectory, dir);
+                        LocalDirectory = Path.Combine(((ICommonGraph)Owner.Graph).BaseDirectory, dir);
                         LocalFileName = filename;
                     }
                 }
@@ -77,6 +77,8 @@ namespace Redback.WebGraph.Actions
             {
                 _requestState.Exception2 = e;
             }
+
+            Owner.UrlPool.SetActualUrl(this, Url, await GetActualUrl());
         }
 
         public override async Task Perform()
@@ -119,7 +121,7 @@ namespace Redback.WebGraph.Actions
                         Level = Level + 1,
                         Page = content
                     };
-                    Owner.AddObject(TargetNode);
+                    Owner.Graph.AddObject(TargetNode);
 #if !NO_WRITE_ORIG_PAGE
                     await SaveAsync(content);
 #endif

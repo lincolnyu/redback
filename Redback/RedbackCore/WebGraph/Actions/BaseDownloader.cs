@@ -6,6 +6,9 @@ namespace Redback.WebGraph.Actions
     {
         #region Properties
 
+        /// <summary>
+        ///  The user requested original URL
+        /// </summary>
         public virtual string Url { get; set; }
 
         #endregion

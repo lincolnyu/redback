@@ -69,7 +69,7 @@ namespace Redback.WebGraph.Actions
                         Level = Level + 1,
                         Page = page
                     };
-                    Owner.AddObject(TargetNode);
+                    Owner.Graph.AddObject(TargetNode);
                 }
             }
         }

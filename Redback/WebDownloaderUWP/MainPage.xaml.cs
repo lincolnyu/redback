@@ -7,6 +7,8 @@ using Windows.Storage;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Input;
 using System.Threading.Tasks;
+using Redback.UrlManagement;
+using Redback.WebGraph.Actions;
 
 // The Blank Page item template is documented at https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -64,12 +66,13 @@ namespace WebDownloaderUWP
 #if USE_SOCKET_IMPLEMENTATION
             var webTask = new SocketSiteGraph(url, _downloadFolder.Path);
 #else
-            var webTask = new HttpSiteGraph(url, _downloadFolder.Path);
+            var manager = DownloadHelper.CreateManager<HttpSiteGraph, UrlPool, HostRegulator, HttpDownloader>(
+                url, _downloadFolder.Path);
 #endif
-            webTask.ObjectProcessed += WebTaskOnObjectProcessed;
+            manager.Graph.ObjectProcessed += WebTaskOnObjectProcessed;
 
-            await webTask.Initialize();
-            await webTask.Run();
+            await manager.Initialize();
+            await manager.Graph.Run();
 
             _searching = false;
         }

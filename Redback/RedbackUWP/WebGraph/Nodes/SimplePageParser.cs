@@ -8,7 +8,9 @@ namespace Redback.WebGraph.Nodes
     {
         #region Types
 
-        public delegate FileDownloader CreateDownloaderDelegate(ISiteGraph owner, SimplePageParser source,
+        public delegate FileDownloader CreateDownloaderDelegate(
+            IDownloadManager owner, 
+            SimplePageParser source,
     int level, string url);
 
         #endregion
