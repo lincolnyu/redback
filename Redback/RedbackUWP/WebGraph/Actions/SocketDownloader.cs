@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Redback.Connections;
 using Redback.Helpers;
 using Redback.WebGraph.Nodes;
+using System.IO;
 
 namespace Redback.WebGraph.Actions
 {
@@ -20,6 +21,14 @@ namespace Redback.WebGraph.Actions
 
         #endregion
 
+        #region Fields
+
+        private string _requestUrl;
+        private string _actualUrl;
+        private bool _downloaded;
+
+        #endregion
+
         #region Properties
 
         public bool UseReferrer { get; set; }
@@ -28,13 +37,35 @@ namespace Redback.WebGraph.Actions
 
         #region Methods
 
+        #region BaseDownloader members
+
         #region BaseAction members
 
         public override async Task Perform()
         {
+            await DownloadIfNot();
+        }
+
+        #endregion
+
+        public override async Task<string> GetActualUrl()
+        {
+            await DownloadIfNot();
+            return string.IsNullOrWhiteSpace(_actualUrl) ? await base.GetActualUrl() : _actualUrl;
+        }
+
+        #endregion
+
+        private async Task DownloadIfNot()
+        {
+            if (_downloaded)
+            {
+                return;
+            }
+            _requestUrl = Url;
             //TODO we may not be able to do https now
-            Url.UrlToHostName(out string prefix, out string hostName, out string path);
-            var owner = (SocketSiteGraph)Owner;
+            _requestUrl.UrlToHostName(out string prefix, out string hostName, out string path);
+            var owner = (SocketSiteGraph)Owner.Graph;
             var agent = owner.GetOrCreateWebAgent(hostName);
             var connected = await agent.SocketConnect();
             var tryHttps = !connected;
@@ -45,14 +76,14 @@ namespace Redback.WebGraph.Actions
             }
             if (tryHttps)
             {
-                Url.UrlToHostName(out prefix, out hostName, out path);
+                _requestUrl.UrlToHostName(out prefix, out hostName, out path);
                 connected = await agent.SocketConnect(true);
                 await AcquirePage(agent, hostName, path, true);
             }
             // TODO report error otherwise?
+            Owner.UrlPool.SetActualUrl(this, Url, await GetActualUrl());
+            _downloaded = true;
         }
-
-        #endregion
 
         private async Task<PageResults> AcquirePage(SocketWebAgent agent, string hostName, string path, bool isHttps = false)
         {
@@ -93,18 +124,24 @@ namespace Redback.WebGraph.Actions
 
                 var response = await agent.GetResponse();
 
-                if (!string.IsNullOrWhiteSpace(response.Location))
+                _actualUrl = response.Location;
+                if (!string.IsNullOrWhiteSpace(_actualUrl))
                 {
                     // Update to the most accurate URL
-                    if (!Url.IsHttps() && response.Location.IsHttps())
+                    if (!_requestUrl.IsHttps() && response.Location.IsHttps())
                     {
-                        Url = response.Location;
+                        _requestUrl = response.Location;
                         return PageResults.IsHttps;
                     }
-                    Url = response.Location;
+
+                    if (_actualUrl.ToString().UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
+                    {
+                        LocalDirectory = Path.Combine(((ICommonGraph)Owner.Graph).BaseDirectory, dir);
+                        LocalFileName = filename;
+                    }
                 }
 
-                if (response.IsSession)
+                if (response.IsSession  )
                 {
                     return await ProcessSessionalPage(agent, hostName, path, response) ? PageResults.Successful : PageResults.Failed;
                 }
@@ -132,7 +169,7 @@ namespace Redback.WebGraph.Actions
                         })
                 {
                     Owner = Owner,
-                    Url = Url,
+                    Url = (await GetActualUrl()).ToString(),
                     InducingAction = this,
                     Level = Level + 1,
                     Page = response.PageContent

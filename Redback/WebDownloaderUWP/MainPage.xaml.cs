@@ -1,4 +1,4 @@
-﻿//#define USE_SOCKET_IMPLEMENTATION
+﻿#define USE_SOCKET_IMPLEMENTATION
 
 using Redback.Helpers;
 using Redback.WebGraph;
@@ -64,7 +64,8 @@ namespace WebDownloaderUWP
 
             var url = TxtUrl.Text;
 #if USE_SOCKET_IMPLEMENTATION
-            var webTask = new SocketSiteGraph(url, _downloadFolder.Path);
+            var manager = DownloadHelper.CreateManager<SocketSiteGraph, UrlPool, HostRegulator, SocketDownloader>
+                (url, _downloadFolder.Path);
 #else
             var manager = DownloadHelper.CreateManager<HttpSiteGraph, UrlPool, HostRegulator, HttpDownloader>(
                 url, _downloadFolder.Path);
