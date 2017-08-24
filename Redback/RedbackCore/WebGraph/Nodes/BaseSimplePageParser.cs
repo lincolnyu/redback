@@ -3,26 +3,76 @@ using System.Text;
 using System.Threading.Tasks;
 using Redback.Helpers;
 using Redback.WebGraph.Actions;
+using System.Collections.Generic;
 
 namespace Redback.WebGraph.Nodes
 {
-    public abstract class BaseSimplePageParser : BaseNode
+    public abstract class BaseSimplePageParser : BaseNode, IActualUrlReceiver
     {
+        #region Types
+
+        private abstract class StringSegment
+        {
+            public abstract string SourceString { get; set; }
+            public string TargetString;
+        }
+
+        private class StringAsIs : StringSegment
+        {
+            public override string SourceString
+            {
+                get => TargetString;
+                set { TargetString = value; }
+            }
+        }
+
+        private class StringToBeChanged : StringSegment
+        {
+            public override string SourceString
+            {
+                get;
+                set;
+            }
+        }
+
+        #endregion
+
+        #region Fields
+
+        private LinkedList<StringSegment> _stringSegments = new LinkedList<StringSegment>();
+        private Dictionary<BaseDownloader, StringSegment> _downloaderToSegment = new Dictionary<BaseDownloader, StringSegment>();
+
+        #endregion
+
         #region Properties
 
         public string Page
         {
             get; set;
         }
-
-        public string OutputPage
-        {
-            get; private set;
-        }
-
+        
         #endregion
 
         #region Methods
+
+        #region IReportActualUrl
+
+        public async void ReportActualUrl(object reporter)
+        {
+            if (reporter is BaseDownloader downloader)
+            {
+                if (_downloaderToSegment.TryGetValue(downloader, out var ss))
+                {
+                    var originalUrl = downloader.Url;
+                    var actualUrl = await downloader.GetActualUrl();
+                    var fileUrl = UrlHelper.GetFileRelative(Url, actualUrl, UrlHelper.ValidateFileName);
+                    var u = $"\"{fileUrl}\"";
+                    ss.TargetString = u;
+                }
+            }
+        }
+
+        #endregion
 
         private static int FindParameter(string page, string parameterName, int start)
         {
@@ -47,143 +97,100 @@ namespace Redback.WebGraph.Nodes
             }
             return -1;
         }
-
-        private static int GetLink(string page, int pos, out string link)
+        
+        public async void Conclude()
         {
-            for (; pos < page.Length && char.IsWhiteSpace(page[pos]); pos++)
+            var sbOutputPage = new StringBuilder();
+            foreach (var ss in _stringSegments)
             {
+                sbOutputPage.Append(ss);
             }
             
-            link = null;
-
-            if (pos >= page.Length)
+            // writes output page to file
+            if (InducingAction is BaseDownloader downloader)
             {
-                return -1;
+                await downloader.SaveAsync(sbOutputPage.ToString());
             }
-
-            var qm = page[pos];
-            if (qm != '\'' && qm != '"')
-            {
-                return -1;
-            }
-
-            var end = page.IndexOf(qm, pos + 1);
-            if (end < 0)
-            {
-                return -1;
-            }
-
-            link = page.Substring(pos + 1, end - pos - 1);
-            return end + 1;
         }
 
         public override async Task Analyze()
         {
             var lastIndex = 0;
-            var sbOutputPage = new StringBuilder();
-
+            
             // TODO how about https?
             // TODO make sure the link is in HTML document rather than javascript
 
-            var href = 0;
-            var src = 0;
-            var toFindHref = true;
-            var toFindSrc = true;
-
-            while (true)
-            {
-                if (toFindHref)
+            await Page.FindAnyParameterAsync(new[] { "href", "src" }, 0,
+                async (index, parameter) =>
                 {
-                    href = FindParameter(Page, "href", lastIndex);
-                    if (href < 0) href = Page.Length;
-                    toFindHref = false;
-                }
-
-                if (toFindSrc)
-                {
-                    src = FindParameter(Page, "src", lastIndex);
-                    if (src < 0) src = Page.Length;
-                    toFindSrc = false;
-                }
-
-                if (href == Page.Length && src == Page.Length)
-                {
-                    break;
-                }
-
-                int index;
-                if (src < href)
-                {
-                    index = src;
-                    toFindSrc = true;
-                }
-                else
-                {
-                    index = href;
-                    toFindHref = true;
-                }
-
-                var linkEnd = GetLink(Page, index, out string link); // one character after closing double quotation mark 
-                if (linkEnd < 0 || link == null)
-                {
-                    var sb = Page.Substring(lastIndex, index - lastIndex);
-                    sbOutputPage.Append(sb);
-                    lastIndex = index;
-                    continue;
-                }
-                var absLink = UrlHelper.GetAbsoluteUrl(Url, link);
-                link = absLink;
-
-                var stringBetween = Page.Substring(lastIndex, index - lastIndex);
-                sbOutputPage.Append(stringBetween);
-
-                var downloaded = Owner.HasDownloaded(link);
-                try
-                {
-                    // check to see if the link has been downloaded
-                    if (!downloaded)
+                    var linkEnd = Page.GetLink(index, out string link); // one character after closing double quotation mark 
+                    if (linkEnd < 0 || link == null)
                     {
-                        var download = CreateDownloader(link);
-                        if (download != null)
+                        var sb = Page.Substring(lastIndex, index - lastIndex);
+                        _stringSegments.AddLast(new StringAsIs { SourceString = sb });
+                        lastIndex = index;
+                        return lastIndex;
+                    }
+                    var absLink = UrlHelper.GetAbsoluteUrl(Url, link);
+                    link = absLink;
+
+                    var stringBetween = Page.Substring(lastIndex, index - lastIndex);
+                    _stringSegments.AddLast(new StringAsIs { SourceString = stringBetween });
+
+                    var downloaded = false;
+                    try
+                    {
+                        if (!Owner.UrlPool.IsInThePool(link))
                         {
-                            Actions.Add(download);
-                            Owner.AddObject(download);
-                            Owner.SetHasDownloaded(link);
+                            var download = CreateDownloader(link);
+                            if (download != null)
+                            {
+                                Actions.Add(download);
+                                Owner.Graph.AddObject(download);
+                                Owner.UrlPool.Subscribe(link, this);
+                                _stringSegments.AddLast(new StringToBeChanged { SourceString = link});
+                                downloaded = true;
+                            }
+                        }
+                        else if (Owner.UrlPool.IsDownloaded(link, out string actualUrl))
+                        {
+                            _stringSegments.AddLast(new StringToBeChanged { SourceString = link, TargetString = actualUrl });
+                            downloaded = true;
+                        }
+                        else
+                        {
+                            _stringSegments.AddLast(new StringToBeChanged { SourceString = link });
                             downloaded = true;
                         }
                     }
-                }
-                catch (ArgumentException)
-                {
-                    // skip this link which is probably invalid
-                }
+                    catch (ArgumentException)
+                    {
+                        // skip this link which is probably invalid
+                        System.Diagnostics.Debug.WriteLine("Argument Exception occurred when creating downloader");
+                    }
+                    catch (Exception)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Unexpected exception occurred when creating downloader");
+                    }
 
-                if (downloaded)
-                {
-                    var fileUrl = UrlHelper.GetFileRelative(Url, link);
-                    var u = $"\"{fileUrl}\"";
-                    sbOutputPage.Append(u);
-                }
-                else
-                {
-                    // have to use original
-                    sbOutputPage.Append(Page.Substring(index, linkEnd));
-                }
+                    if (!downloaded)
+                    {
+                        // have to use original
+                        var orig = Page.Substring(index, linkEnd - index);
+                        _stringSegments.AddLast(new StringAsIs { SourceString = orig });
+                    }
 
-                lastIndex = linkEnd;
-            }
+                    System.Diagnostics.Debug.WriteLine($"{link} processed.");
 
-            sbOutputPage.Append(Page.Substring(lastIndex, Page.Length - lastIndex));
-            OutputPage = sbOutputPage.ToString();
+                    lastIndex = linkEnd;
+                    return linkEnd;
+                });
 
-            // writes output page to file
-            if (InducingAction is BaseDownloader downloader)
-            {
-                await downloader.SaveAsync(OutputPage);
-            }
+            _stringSegments.AddLast(new StringAsIs { SourceString =
+                Page.Substring(lastIndex, Page.Length - lastIndex) });
         }
 
-        protected abstract BaseAction CreateDownloader(string link);
+        protected abstract BaseDownloader CreateDownloader(string link);
 
         #endregion
     }

@@ -54,7 +54,14 @@ namespace Redback.WebGraph.Actions
                 using (var sr = new StreamReader(s))
                 {
                     var page = sr.ReadToEnd();
-                    TargetNode = new SimplePageParser
+                    TargetNode = new SimplePageParser((owner, source, level, url) =>
+                        new FrameworkImplementedDownloader
+                        {
+                            Owner = owner,
+                            SourceNode = source,
+                            Level = level,
+                            Url = url,
+                        })
                     {
                         Owner = Owner,
                         Url = Url,
@@ -62,7 +69,7 @@ namespace Redback.WebGraph.Actions
                         Level = Level + 1,
                         Page = page
                     };
-                    Owner.AddObject(TargetNode);
+                    Owner.Graph.AddObject(TargetNode);
                 }
             }
         }

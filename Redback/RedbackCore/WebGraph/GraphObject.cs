@@ -4,7 +4,7 @@
     {
         #region Properties
 
-        public ISiteGraph Owner
+        public IDownloadManager Owner
         {
             get; set;
         }

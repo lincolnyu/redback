@@ -13,7 +13,7 @@ using Windows.Networking.Connectivity;
 
 namespace Redback.Connections
 {
-    public class WebAgent : IWebAgent
+    public class SocketWebAgent
     {
         #region Delegates
 
@@ -82,7 +82,7 @@ namespace Redback.Connections
 
         #region Constructors
 
-        public WebAgent(string hostDisplayName)
+        public SocketWebAgent(string hostDisplayName)
         {
             HostDisplayName = hostDisplayName;
         }
@@ -95,12 +95,15 @@ namespace Redback.Connections
         {
             get; private set;
         }
-        
+
+        public TimeSpan PlainTextTimeout = TimeSpan.FromSeconds(3);
+        public TimeSpan HttpsTimeout = TimeSpan.FromSeconds(3);
+
         #endregion
 
         #region Methods
 
-        public async Task<bool> SocketConnect()
+        public async Task<bool> SocketConnect(bool https = false)
         {
             HostName hostName;
             try
@@ -113,21 +116,40 @@ namespace Redback.Connections
             }
 
             _socket = new StreamSocket();
+            var connected = false;
 
             var localHostNames = NetworkInformation.GetHostNames();
-            var successful = false;
             foreach (var localHostName in localHostNames)
             {
                 if (localHostName.IPInformation != null)
                 {
                     var adapter = localHostName.IPInformation.NetworkAdapter;
 
+                    // TODO This is still unable to do HTTPS
+                    // References for HTTPS
+                    //  https://social.msdn.microsoft.com/Forums/windowsapps/en-US/07b90540-ed8b-488e-9bba-04d844f0b1d9/uwp-streamsocket-in-background-trouble-with-ssl-https?forum=wpdevelop
                     try
                     {
-                        await _socket.ConnectAsync(hostName, "80", SocketProtectionLevel.PlainSocket, adapter);
-                        // TODO another version works on a binding to a specific adapter, we should not need that for now
-                        successful = true;
+                        if (https)
+                        {
+                            // _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+                            // _socket.Control.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+
+                            SocketConnectTimeout(HttpsTimeout);
+                            await _socket.ConnectAsync(hostName, "443", SocketProtectionLevel.Tls12, adapter);
+                            connected = true;
+                        }
+                        else
+                        {
+                            SocketConnectTimeout(PlainTextTimeout);
+                            await _socket.ConnectAsync(hostName, "80", SocketProtectionLevel.PlainSocket, adapter);
+                            connected = true;
+                        }
                         break;
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        _socket = new StreamSocket();
                     }
                     catch (Exception)
                     {
@@ -144,7 +166,13 @@ namespace Redback.Connections
             _writer = null;
             _reader = null;
 
-            return successful;
+            return connected;
+        }
+
+        private async void SocketConnectTimeout(TimeSpan timeout)
+        {
+            await Task.Delay(timeout);
+            _socket.Dispose();
         }
 
         public async Task<bool> SendRequest(string request)
@@ -315,33 +343,32 @@ namespace Redback.Connections
                 if (contentType.Contains("text/html"))
                 {
                     var sbPayload = new StringBuilder();
+                    Encoding enc;
                     if (contentType.Contains("utf8"))
                     {
-                        var enc = new UTF8Encoding();
-                        var dec = enc.GetDecoder();
-                        var charCount = dec.GetCharCount(data, 0, data.Length);
-                        var chars = new char[charCount];
-                        dec.GetChars(data, 0, data.Length, chars, 0);
-                        foreach (var c in chars)
-                        {
-                            sbPayload.Append(c);
-                        }
+                        enc = new UTF8Encoding();
                     }
                     else
                     {
-                        // use trivial decoding
-                        // TODO to support other decoding methods?
-                        foreach (var b in data)
-                        {
-                            var c = (char) b;
-                            sbPayload.Append(c);
-                        }
+                        // TODO other encoding types
+                        enc = new ASCIIEncoding();
                     }
+                    var dec = enc.GetDecoder();
+                    var charCount = dec.GetCharCount(data, 0, data.Length);
+                    var chars = new char[charCount];
+                    dec.GetChars(data, 0, data.Length, chars, 0);
+                    foreach (var c in chars)
+                    {
+                        sbPayload.Append(c);
+                    }
+
                     response.PageContent = sbPayload.ToString();
                     response.DataContent = null;
+                    // TODO support other encoding type
                 }
                 else
                 {
+                    // Include not text encoded by unsupported encoding type
                     response.DataContent = data;
                     response.PageContent = null;
                 }

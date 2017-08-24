@@ -1,15 +1,34 @@
 ﻿using System;
-using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Redback.Connections;
 using Redback.Helpers;
 using Redback.WebGraph.Nodes;
+using System.IO;
 
 namespace Redback.WebGraph.Actions
 {
-    public class MySocketDownloader : FileDownloader
+    public class SocketDownloader : FileDownloader
     {
+        #region Types
+
+        private enum PageResults
+        {
+            Successful,
+            IsHttps,
+            Failed
+        }
+
+        #endregion
+
+        #region Fields
+
+        private string _requestUrl;
+        private string _responseUrl;
+        private bool _downloaded;
+
+        #endregion
+
         #region Properties
 
         public bool UseReferrer { get; set; }
@@ -18,25 +37,58 @@ namespace Redback.WebGraph.Actions
 
         #region Methods
 
+        #region BaseDownloader members
+
         #region BaseAction members
 
         public override async Task Perform()
         {
-            //TODO we may not be able to do https now
-            Url.UrlToHostName(out string prefix, out string hostName, out string path);
-            var owner = (ISiteGraph<WebAgent>)Owner;
-            var agent = owner.GetOrCreateWebAgent(hostName);
-            var connected = await agent.SocketConnect();
-            if (connected)
-            {
-                await AcquirePage(agent, hostName, path);
-            }
-            // TODO report error otherwise?
+            await DownloadIfNot();
         }
 
         #endregion
 
-        private async Task<bool> AcquirePage(WebAgent agent, string hostName, string path)
+        public override async Task<string> GetActualUrl()
+        {
+            await DownloadIfNot();
+            return await ActualUrlAssumingReady();
+        }
+
+        private async Task<string> ActualUrlAssumingReady() =>
+            string.IsNullOrWhiteSpace(_responseUrl) ? await base.GetActualUrl() : _responseUrl;
+
+        #endregion
+
+        private async Task DownloadIfNot()
+        {
+            if (_downloaded)
+            {
+                return;
+            }
+            _downloaded = true;
+            _requestUrl = Url;
+            //TODO we may not be able to do https now
+            _requestUrl.UrlToHostName(out string prefix, out string hostName, out string path);
+            var owner = (SocketSiteGraph)Owner.Graph;
+            var agent = owner.GetOrCreateWebAgent(hostName);
+            var connected = await agent.SocketConnect();
+            var tryHttps = !connected;
+            if (connected)
+            {
+                var res = await AcquirePage(agent, hostName, path);
+                tryHttps = res == PageResults.IsHttps;
+            }
+            if (tryHttps)
+            {
+                _requestUrl.UrlToHostName(out prefix, out hostName, out path);
+                connected = await agent.SocketConnect(true);
+                await AcquirePage(agent, hostName, path, true);
+            }
+            // TODO report error otherwise?
+            Owner.UrlPool.SetActualUrl(this, Url, await GetActualUrl());
+        }
+
+        private async Task<PageResults> AcquirePage(SocketWebAgent agent, string hostName, string path, bool isHttps = false)
         {
             var sbRequest = new StringBuilder();
 
@@ -53,7 +105,8 @@ namespace Redback.WebGraph.Actions
             sbRequest.AddParameter(@"Accept: text/html, application/xhtml+xml, */*");
             if (UseReferrer)
             {
-                sbRequest.AddParameterFormat(@"Referer: http://{0}/", hostName);
+                sbRequest.AddParameterFormat(@"Referer: {0}://{1}/",
+                    isHttps ? "https" : "http", hostName);
             }
             sbRequest.AddParameter(@"Accept-Language: en-AU,en;q=0.8,zh-Hans-CN;q=0.5,zh-Hans;q=0.3");
             sbRequest.AddParameter(@"User-Agent: Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko");
@@ -69,53 +122,68 @@ namespace Redback.WebGraph.Actions
                 var r = await agent.SendRequest(request);
                 if (!r)
                 {
-                    return false;
+                    return PageResults.Failed;
                 }
 
                 var response = await agent.GetResponse();
 
-                if (!string.IsNullOrWhiteSpace(response.Location))
+                _responseUrl = response.Location;
+                var actual = await ActualUrlAssumingReady();
+
+                // Update to the most accurate URL
+                if (!_requestUrl.IsHttps() && actual.IsHttps())
                 {
-                    // Update to the most accurate URL
-                    Url = response.Location;
+                    _requestUrl = response.Location;
+                    return PageResults.IsHttps;
+                }
+
+
+                if (actual.ToString().UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
+                {
+                    LocalDirectory = Path.Combine(((ICommonGraph)Owner.Graph).BaseDirectory, dir);
+                    LocalFileName = filename;
+                }
+                else
+                {
+                    return PageResults.Failed;
                 }
 
                 if (response.IsSession)
                 {
-                    return await ProcessSessionalPage(agent, hostName, path, response);
+                    return await ProcessSessionalPage(agent, hostName, path, response) ? PageResults.Successful : PageResults.Failed;
                 }
 
-                return await ProcessPageResponse(response);
+                return await ProcessPageResponse(response) ? PageResults.Successful : PageResults.Failed;
             }
             catch
             {
-                return false;
+                return PageResults.Failed;
             }
         }
 
-        private async Task<bool> ProcessPageResponse(WebAgent.HttpResponse response)
+        private async Task<bool> ProcessPageResponse(SocketWebAgent.HttpResponse response)
         {
             if (response.IsPage)
             {
-                TargetNode = new SimplePageParser
+                TargetNode = new SimplePageParser((owner, source, level, url) =>
+                        new SocketDownloader
+                        {
+                            Owner = owner,
+                            SourceNode = source,
+                            Level = level,
+                            Url = url,
+                            UseReferrer = UseReferrer
+                        })
                 {
                     Owner = Owner,
-                    Url = Url,
+                    Url = (await ActualUrlAssumingReady()).ToString(),
                     InducingAction = this,
                     Level = Level + 1,
                     Page = response.PageContent
                 };
-                Owner.AddObject(TargetNode);
+                Owner.Graph.AddObject(TargetNode);
 #if !NO_WRITE_ORIG_PAGE
-                var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                var file = await folder.CreateNewFileAsync(LocalFileName);
-                using (var outputStream = await file.OpenStreamForWriteAsync())
-                {
-                    using (var sw = new StreamWriter(outputStream))
-                    {
-                        sw.Write(response.PageContent);
-                    }
-                }
+                await SaveAsync(response.PageContent);
 #endif
             }
             else if (response.IsSession)
@@ -126,18 +194,12 @@ namespace Redback.WebGraph.Actions
             {
                 // NOTE this is to save non page data which has no chance to save otherwise
                 // NOTE page data is supposed to be saved if wanted by the node (parser)
-                var folder = await LocalDirectory.GetOrCreateFolderAsync();
-                var file = await folder.CreateNewFileAsync(LocalFileName);
-                using (var outputStream = await file.OpenStreamForWriteAsync())
-                {
-                    await outputStream.WriteAsync(response.DataContent, 0, response.DataContent.Length);
-                    await outputStream.FlushAsync();
-                }
+                await SaveDataAsync(response.DataContent);
             }
             return true;
         }
 
-        private async Task<bool> ProcessSessionalPage(WebAgent agent, string hostName, string path, WebAgent.HttpResponse response)
+        private async Task<bool> ProcessSessionalPage(SocketWebAgent agent, string hostName, string path, SocketWebAgent.HttpResponse response)
         {
             var recursive = 0;
             const int maxAttempt = 5;
@@ -190,7 +252,7 @@ namespace Redback.WebGraph.Actions
                 sbRequest.AddParameterFormat(@"Host: {0}", hostName);
                 sbRequest.AddParameter(@"Connection: Keep-Alive");
                 sbRequest.AddParameter(@"DNT: 1");
-                Owner.AddObject(TargetNode);
+                Owner.Graph.AddObject(TargetNode);
 
                 request = sbRequest.ToString();
                 r = await agent.SendRequest(request);
@@ -234,7 +296,7 @@ namespace Redback.WebGraph.Actions
             }
             return cookie.Substring(start, end - start);
         }
-        
+
         #endregion
     }
 }

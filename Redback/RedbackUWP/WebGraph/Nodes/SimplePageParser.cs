@@ -6,31 +6,30 @@ namespace Redback.WebGraph.Nodes
 {
     public class SimplePageParser : BaseSimplePageParser
     {
+        #region Types
+
+        public delegate FileDownloader CreateDownloaderDelegate(
+            IDownloadManager owner, 
+            SimplePageParser source,
+    int level, string url);
+
+        #endregion
+
+        #region Constructors
+
+        public SimplePageParser(CreateDownloaderDelegate createDownloader)
+        {
+            CreateDownloaderCallback = createDownloader;
+        }
+
+        #endregion
+
         #region Methods
 
-        protected override BaseAction CreateDownloader(string link)
-        {
-            if (!link.UrlToFilePath(out string dir, out string fileName))
-            {
-                return null;
-            }
+        protected override BaseDownloader CreateDownloader(string link)
+            => CreateDownloaderCallback(Owner, this, Level + 1, link);
 
-            var owner = (SiteGraph)Owner;
-            dir = GetProperDirectory(owner.BaseDirectory, dir);
-
-            var downloader = new MySocketDownloader
-            {
-                Owner = Owner,
-                SourceNode = this,
-                Level = Level + 1,
-                Url = link,
-                LocalDirectory = dir,
-                LocalFileName = fileName,
-                UseReferrer = true
-            };
-
-            return downloader;
-        }     
+        public CreateDownloaderDelegate CreateDownloaderCallback { get; private set; }
 
         private string GetProperDirectory(string baseDir, string dir)
         {

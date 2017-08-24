@@ -7,7 +7,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{01B732CB-BF3F-4F3A-B61C-9EFF5D8E0322}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>RedbackCoreLite</RootNamespace>
+    <RootNamespace>Redback</RootNamespace>
     <AssemblyName>RedbackCoreLite</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
     <FileAlignment>512</FileAlignment>
@@ -37,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Helpers\EncodingHelper.cs" />
+    <Compile Include="Helpers\HtmlNaiveHelper.cs" />
     <Compile Include="Helpers\HtmlNodeHelper.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\UrlHelper.cs" />

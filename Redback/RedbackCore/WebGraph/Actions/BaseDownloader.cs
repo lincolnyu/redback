@@ -6,6 +6,9 @@ namespace Redback.WebGraph.Actions
     {
         #region Properties
 
+        /// <summary>
+        ///  The user requested original URL
+        /// </summary>
         public virtual string Url { get; set; }
 
         #endregion
@@ -13,6 +16,12 @@ namespace Redback.WebGraph.Actions
         #region Methods
 
         public abstract Task SaveAsync(string content);
+
+        /// <summary>
+        ///  Predownload to get the actual URL
+        /// </summary>
+        /// <returns></returns>
+        public virtual async Task<string> GetActualUrl() => Url;
 
         #endregion
     }

@@ -1,10 +1,15 @@
-﻿using Redback.Helpers;
+﻿// Socket is duplicated left only for research / reference
+//#define USE_SOCKET_IMPLEMENTATION
+
+using Redback.Helpers;
 using Redback.WebGraph;
 using Windows.System;
 using Windows.Storage;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Input;
 using System.Threading.Tasks;
+using Redback.UrlManagement;
+using Redback.WebGraph.Actions;
 
 // The Blank Page item template is documented at https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -59,16 +64,22 @@ namespace WebDownloaderUWP
             _downloadFolder = await storage.GetOrCreateSubfolderAsync("Downloads");
 
             var url = TxtUrl.Text;
-            var webTask = new SiteGraph(url, _downloadFolder.Path);
+#if USE_SOCKET_IMPLEMENTATION
+            var manager = DownloadHelper.CreateManager<SocketSiteGraph, UrlPool, HostRegulator, SocketDownloader>
+                (url, _downloadFolder.Path);
+#else
+            var manager = DownloadHelper.CreateManager<HttpSiteGraph, UrlPool, HostRegulator, HttpDownloader>(
+                url, _downloadFolder.Path);
+#endif
+            manager.Graph.ObjectProcessed += WebTaskOnObjectProcessed;
 
-            webTask.ObjectProcessed += WebTaskOnObjectProcessed;
-
-            await webTask.Run();
+            await manager.Initialize();
+            await manager.Graph.Run();
 
             _searching = false;
         }
 
-        private void WebTaskOnObjectProcessed(object sender, SiteGraph.ObjectProcessedEventArgs args)
+        private void WebTaskOnObjectProcessed(object sender, BaseSiteGraph.ObjectProcessedEventArgs args)
         {
             var hasUrl = args.Object as IHasUrl;
             var url = "";
