@@ -21,14 +21,17 @@ namespace Redback.WebGraph.Actions
             public Exception Exception2;
         }
 
-        private Uri _actualUrl;
+        private Uri _responseUrl;
         private RequestState _requestState;
 
         public override async Task<string> GetActualUrl()
         {
             await DownloadIfNot();
-            return _actualUrl?.ToString() ?? await base.GetActualUrl();
+            return await GetActualUrlAssumingReady();
         }
+
+        private async Task<string> GetActualUrlAssumingReady()
+            => _responseUrl?.ToString() ?? await base.GetActualUrl();
 
         private async Task DownloadIfNot()
         {
@@ -57,11 +60,16 @@ namespace Redback.WebGraph.Actions
             {
                 if (_requestState.Exception == null)
                 {
-                    _actualUrl = _requestState.Response.ResponseUri;
-                    if (_actualUrl.ToString().UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
+                    _responseUrl = _requestState.Response.ResponseUri;
+                    var actual = await GetActualUrlAssumingReady();
+                    if (actual.UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
                     {
                         LocalDirectory = Path.Combine(((ICommonGraph)Owner.Graph).BaseDirectory, dir);
                         LocalFileName = filename;
+                    }
+                    else
+                    {
+                        _requestState.Exception2 = new ArgumentException("Cannot turn the URL to local file path");
                     }
                 }
                 else
@@ -104,7 +112,7 @@ namespace Redback.WebGraph.Actions
                 // TODO encoding
                 using (var sr = new StreamReader(_requestState.ResponseStream, enc))
                 {
-                    System.Diagnostics.Debug.Assert(_actualUrl != null);
+                    System.Diagnostics.Debug.Assert(_responseUrl != null);
                     var content = sr.ReadToEnd();
                     TargetNode = new SimplePageParser((owner, source, level, url) =>
                         new HttpDownloader
@@ -116,7 +124,7 @@ namespace Redback.WebGraph.Actions
                         })
                     {
                         Owner = Owner,
-                        Url = _actualUrl.ToString(),
+                        Url = _responseUrl.ToString(),
                         InducingAction = this,
                         Level = Level + 1,
                         Page = content

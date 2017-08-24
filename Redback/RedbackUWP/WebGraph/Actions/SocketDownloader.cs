@@ -24,7 +24,7 @@ namespace Redback.WebGraph.Actions
         #region Fields
 
         private string _requestUrl;
-        private string _actualUrl;
+        private string _responseUrl;
         private bool _downloaded;
 
         #endregion
@@ -51,8 +51,11 @@ namespace Redback.WebGraph.Actions
         public override async Task<string> GetActualUrl()
         {
             await DownloadIfNot();
-            return string.IsNullOrWhiteSpace(_actualUrl) ? await base.GetActualUrl() : _actualUrl;
+            return await ActualUrlAssumingReady();
         }
+
+        private async Task<string> ActualUrlAssumingReady() =>
+            string.IsNullOrWhiteSpace(_responseUrl) ? await base.GetActualUrl() : _responseUrl;
 
         #endregion
 
@@ -62,6 +65,7 @@ namespace Redback.WebGraph.Actions
             {
                 return;
             }
+            _downloaded = true;
             _requestUrl = Url;
             //TODO we may not be able to do https now
             _requestUrl.UrlToHostName(out string prefix, out string hostName, out string path);
@@ -82,7 +86,6 @@ namespace Redback.WebGraph.Actions
             }
             // TODO report error otherwise?
             Owner.UrlPool.SetActualUrl(this, Url, await GetActualUrl());
-            _downloaded = true;
         }
 
         private async Task<PageResults> AcquirePage(SocketWebAgent agent, string hostName, string path, bool isHttps = false)
@@ -124,24 +127,28 @@ namespace Redback.WebGraph.Actions
 
                 var response = await agent.GetResponse();
 
-                _actualUrl = response.Location;
-                if (!string.IsNullOrWhiteSpace(_actualUrl))
-                {
-                    // Update to the most accurate URL
-                    if (!_requestUrl.IsHttps() && response.Location.IsHttps())
-                    {
-                        _requestUrl = response.Location;
-                        return PageResults.IsHttps;
-                    }
+                _responseUrl = response.Location;
+                var actual = await ActualUrlAssumingReady();
 
-                    if (_actualUrl.ToString().UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
-                    {
-                        LocalDirectory = Path.Combine(((ICommonGraph)Owner.Graph).BaseDirectory, dir);
-                        LocalFileName = filename;
-                    }
+                // Update to the most accurate URL
+                if (!_requestUrl.IsHttps() && actual.IsHttps())
+                {
+                    _requestUrl = response.Location;
+                    return PageResults.IsHttps;
                 }
 
-                if (response.IsSession  )
+
+                if (actual.ToString().UrlToFilePath(out string dir, out string filename, UrlHelper.ValidateFileName))
+                {
+                    LocalDirectory = Path.Combine(((ICommonGraph)Owner.Graph).BaseDirectory, dir);
+                    LocalFileName = filename;
+                }
+                else
+                {
+                    return PageResults.Failed;
+                }
+
+                if (response.IsSession)
                 {
                     return await ProcessSessionalPage(agent, hostName, path, response) ? PageResults.Successful : PageResults.Failed;
                 }
@@ -169,7 +176,7 @@ namespace Redback.WebGraph.Actions
                         })
                 {
                     Owner = Owner,
-                    Url = (await GetActualUrl()).ToString(),
+                    Url = (await ActualUrlAssumingReady()).ToString(),
                     InducingAction = this,
                     Level = Level + 1,
                     Page = response.PageContent

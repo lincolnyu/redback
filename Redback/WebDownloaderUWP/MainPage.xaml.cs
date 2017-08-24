@@ -1,4 +1,5 @@
-﻿#define USE_SOCKET_IMPLEMENTATION
+﻿// Socket is duplicated left only for research / reference
+//#define USE_SOCKET_IMPLEMENTATION
 
 using Redback.Helpers;
 using Redback.WebGraph;
