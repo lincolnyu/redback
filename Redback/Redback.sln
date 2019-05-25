@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26730.8
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.28917.181
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QSharp.Scheme.Classical.Trees", "..\..\qsharp\QSharp\QSharp.Scheme.Classical.Trees\QSharp.Scheme.Classical.Trees.csproj", "{A297C131-4FAB-4F8F-B9B8-B5048FC12236}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QSharp.Scheme.Classical.Trees", "..\..\qsharp\QSharp\QSharp.Scheme.Classical.Trees\QSharp.Scheme.Classical.Trees.csproj", "{A297C131-4FAB-4F8F-B9B8-B5048FC12236}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedbackUWP", "RedbackUWP\RedbackUWP.csproj", "{C6F83EBB-C4FF-4D7B-9D7D-CD13F09E047C}"
 EndProject
@@ -13,7 +13,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebDownloaderUWP", "WebDown
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedbackTests", "RedbackTests\RedbackTests.csproj", "{51B2EE02-FABE-4B0E-843D-911D212A7924}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedbackCoreLite", "RedbackCoreLite\RedbackCoreLite.csproj", "{01B732CB-BF3F-4F3A-B61C-9EFF5D8E0322}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RedbackCoreLite", "RedbackCoreLite\RedbackCoreLite.csproj", "{01B732CB-BF3F-4F3A-B61C-9EFF5D8E0322}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -75,7 +75,9 @@ Global
 		{4B3C600E-AA88-48D5-8B97-A7CF35E7ACBE}.Release|x64.Build.0 = Release|Any CPU
 		{4B3C600E-AA88-48D5-8B97-A7CF35E7ACBE}.Release|x86.ActiveCfg = Release|Any CPU
 		{4B3C600E-AA88-48D5-8B97-A7CF35E7ACBE}.Release|x86.Build.0 = Release|Any CPU
-		{539EAD3A-F8E5-4055-8FE5-515614DEA281}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{539EAD3A-F8E5-4055-8FE5-515614DEA281}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{539EAD3A-F8E5-4055-8FE5-515614DEA281}.Debug|Any CPU.Build.0 = Debug|x64
+		{539EAD3A-F8E5-4055-8FE5-515614DEA281}.Debug|Any CPU.Deploy.0 = Debug|x64
 		{539EAD3A-F8E5-4055-8FE5-515614DEA281}.Debug|ARM.ActiveCfg = Debug|ARM
 		{539EAD3A-F8E5-4055-8FE5-515614DEA281}.Debug|ARM.Build.0 = Debug|ARM
 		{539EAD3A-F8E5-4055-8FE5-515614DEA281}.Debug|ARM.Deploy.0 = Debug|ARM
