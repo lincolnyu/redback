@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.Threading.Tasks;
 using Redback.Helpers;
-using System.Collections.Generic;
 
 namespace Redback.WebGraph.Actions
 {
